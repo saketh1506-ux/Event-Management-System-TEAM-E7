@@ -9,7 +9,7 @@
 
 ## About
 
-This is a web-based Event Management System for managing events, registrations, participants, and user roles.
+This is a web-based Event Management System for managing events,registrations,participants,and user roles.
 
 ## Documents
 
