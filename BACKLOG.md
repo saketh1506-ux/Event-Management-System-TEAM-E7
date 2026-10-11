@@ -1,57 +1,78 @@
-# Event Management System - GitHub Product Backlog & Sprint Plan
+# Event Management System — Product Backlog & Sprint Execution Plan
 
 **Team E7:**
-- Saketh Narayanam – PES1UG24CS292
-- Neeraj R Gowda – PES1UG24CS295
-- Likhith Reddy M – PES1UG24CS282
-- N. Adil Ahmed – PES1UG24CS285
+- Saketh Narayanam – PES1UG24CS292 (@saketh1506-ux)
+- Neeraj R Gowda – PES1UG24CS295 (@neerajrgowda8558-arch)
+- Likhith Reddy M – PES1UG24CS282 (@52likhith)
+- N. Adil Ahmed – PES1UG24CS285 (@adilahmed55)
 
-**Course:** Software Engineering Mini-Project Deliverables Part-2
-**Repository:** [https://github.com/saketh1506-ux/Event-Management-System-TEAM-E7](https://github.com/saketh1506-ux/Event-Management-System-TEAM-E7)
+**Course:** Software Engineering Mini-Project Deliverables Part-2  
+**GitHub Repository:** [saketh1506-ux/Event-Management-System-TEAM-E7](https://github.com/saketh1506-ux/Event-Management-System-TEAM-E7)  
+**Live GitHub Project Board:** [Event Management System - Team E7 Project #2](https://github.com/users/saketh1506-ux/projects/2)
 
 ---
 
-## Summary of Backlog Estimation & Allocation
+## 1. Product Epics Overview
+
+The requirements from the formal Software Requirements Specification (SRS), Software Architecture Document (SAD), and Software Test Plan are structured into 6 core Epics:
+
+1. **Epic 1: User Management & Authentication** (epic:user-mgmt-auth)  
+   Covers account creation, login, password encryption, session lifecycle, and route authorization.
+2. **Epic 2: Event Management & Discovery** (epic:event-mgmt)  
+   Covers public catalog browsing, keyword search, category filtering, event details view, and organizer event CRUD with capacity configuration.
+3. **Epic 3: Registration & Capacity Management** (epic:registration)  
+   Covers attendee one-click registration, automated full-capacity rejection, duplicate registration prevention, registration cancellation, and transactional data integrity.
+4. **Epic 4: Communication, Notifications & Reporting** (epic:notifications-reporting)  
+   Covers organizer broadcast announcements to registered participants and registration reports generation/export.
+5. **Epic 5: Administrator Management & Governance** (epic:admin-controls)  
+   Covers administrative moderation of users, organizers, and inappropriate events, with strict privilege elevation guards.
+6. **Epic 6: System Architecture & Quality Engineering** (epic:architecture-quality)  
+   Covers 3-tier modular scaffolding, API input sanitization, responsive layout, catalog and registration performance tuning, CI/CD automation, and execution of all 18 test cases.
+
+---
+
+## 2. Sprint Allocation Summary
+
 - **Total Backlog Items:** 24
-- **Total Story Points:** 83 points
+- **Total Story Points:** 83 points (using relative Fibonacci scale: 1, 2, 3, 5, 8)
 - **Sprint 1 (19–23 Oct 2026):** 16 items | 54 story points
 - **Sprint 2 (26–30 Oct 2026):** 8 items | 29 story points
+- **Sprint Dry Run Period:** 12th Oct to 16th Oct 2026
 
-### Story Point Distribution across Team Members:
-| Team Member | PRN | Sprint 1 Pts | Sprint 2 Pts | Total Pts | Assigned Functional Focus |
-|---|---|---|---|---|---|
-| Saketh Narayanam | PES1UG24CS292 | 13 | 6 | 19 | Authentication, Session Security & Reporting |
-| Neeraj R Gowda | PES1UG24CS295 | 16 | 8 | 24 | Event Discovery, Organizer Ops & Admin Module |
-| Likhith Reddy M | PES1UG24CS282 | 14 | 7 | 21 | Registration Engine, Capacity Rules & E2E Testing |
-| N. Adil Ahmed | PES1UG24CS285 | 11 | 8 | 19 | Layered Architecture, Security Input Guard & CI/CD |
+### Workload Distribution Across Team Members:
+| Team Member | GitHub Handle | PRN | Sprint 1 Pts | Sprint 2 Pts | Total Pts | Assigned Focus Area |
+|---|---|---|---|---|---|---|
+| **Saketh Narayanam** | @saketh1506-ux | PES1UG24CS292 | 13 | 6 | 19 | Authentication, Password Security, Session Handling, Reports |
+| **Neeraj R Gowda** | @neerajrgowda8558-arch | PES1UG24CS295 | 16 | 8 | 24 | Event Discovery, Search/Filter, Organizer CRUD, Admin Module |
+| **Likhith Reddy M** | @52likhith | PES1UG24CS282 | 14 | 7 | 21 | Registration Engine, Capacity Validation, E2E Test Suite |
+| **N. Adil Ahmed** | @adilahmed55 | PES1UG24CS285 | 11 | 8 | 19 | Modular Architecture, Security Guards, Responsive UI, CI/CD |
 
 ---
 
-## Detailed Backlog Table
+## 3. Requirements Traceability Matrix (RTM)
 
-| Backlog ID | Title | Type | Target Actor | Story Pts | Sprint | Dependencies | Assignee | Description & Traceability |
-|---|---|---|---|---|---|---|---|---|
-| **FR-01** | User Registration and Authentication | Functional Requirement | Visitor / User / Attendee | 5 | Sprint 1 | None | Saketh Narayanam (PES1UG24CS292) | Allow users to register with name, email, password, and log in securely. Supports UC-04, UC-05, TC-01, TC-02. |
-| **SEC-01** | Password Hashing and Storage Protection | Security Requirement | System / All | 3 | Sprint 1 | None | Saketh Narayanam (PES1UG24CS292) | Passwords shall be hashed using secure one-way hashing (e.g. bcrypt/argon2) and never stored as plain text. Supports NFR-03, TC-11. |
-| **SEC-02** | Authentication and Role-Based Authorization Guard | Security Requirement | System / All | 3 | Sprint 1 | FR-01, SEC-01 | Saketh Narayanam (PES1UG24CS292) | Protected endpoints require JWT/session authentication and role-based checks (Visitor, Attendee, Organizer, Admin). Supports NFR-04, TC-02, TC-09. |
-| **SEC-04** | Secure Session Management and Token Expiry | Security Requirement | System / All | 2 | Sprint 1 | SEC-02 | Saketh Narayanam (PES1UG24CS292) | Reject expired or unauthorized tokens/sessions safely and require re-login. Supports TC-16. |
-| **FR-02** | Event Browsing, Search, and Category Filtering | Functional Requirement | Visitor / User / Attendee | 5 | Sprint 1 | None | Neeraj R Gowda (PES1UG24CS295) | Allow visitors and users to browse public events, search by title/keywords, and filter by categories/date. Supports UC-01, UC-02, TC-03. |
-| **FR-03** | Event Details View | Functional Requirement | Visitor / User / Attendee | 3 | Sprint 1 | FR-02 | Neeraj R Gowda (PES1UG24CS295) | Display event details including title, date, time, location, description, organizer, and capacity. Supports UC-03, TC-03. |
-| **FR-07** | Organizer Event Creation, Editing, and Cancellation | Functional Requirement | Organizer | 5 | Sprint 1 | FR-01, SEC-02 | Neeraj R Gowda (PES1UG24CS295) | Allow authenticated organizers to create new events, update details of their events, and cancel events. Supports UC-11, UC-12, UC-13, TC-08. |
-| **FR-08** | Event Capacity Configuration and Participant List View | Functional Requirement | Organizer | 3 | Sprint 1 | FR-07 | Neeraj R Gowda (PES1UG24CS295) | Allow organizers to define maximum event capacity and view registered participants. Supports UC-14, UC-15, TC-08. |
-| **FR-04** | Event Registration and Full-Capacity Rejection | Functional Requirement | User / Attendee | 5 | Sprint 1 | FR-01, FR-03, FR-08 | Likhith Reddy M (PES1UG24CS282) | Allow authenticated attendees to register for an event; automatically reject registration when capacity is full. Supports UC-06, TC-04, TC-05. |
-| **FR-05** | Duplicate Registration Prevention and Registration Cancellation | Functional Requirement | User / Attendee | 3 | Sprint 1 | FR-04 | Likhith Reddy M (PES1UG24CS282) | Prevent a user from registering twice for the same event and allow attendees to cancel existing registrations. Supports UC-06, UC-07, TC-06, TC-07. |
-| **FR-06** | Attendee Registered Events Dashboard | Functional Requirement | User / Attendee | 3 | Sprint 1 | FR-04 | Likhith Reddy M (PES1UG24CS282) | Allow registered users to view a list of all events they have registered for. Supports UC-08, TC-07. |
-| **NFR-06** | Data Consistency for Event Capacities and Registrations | Non-Functional Requirement | System / Database | 3 | Sprint 1 | FR-04, FR-05 | Likhith Reddy M (PES1UG24CS282) | Maintain atomic registration counts and transactional consistency under concurrent registrations and cancellations. Supports TC-13. |
-| **NFR-07** | Modular Client-Server Component Architecture | Non-Functional Requirement | Architecture | 3 | Sprint 1 | None | N. Adil Ahmed (PES1UG24CS285) | Implement layered architecture: React.js UI, Express.js REST API layer, isolated Data Access/DB layer. Supports TC-14, 09_Software_Architecture. |
-| **SEC-03** | Input Validation and Sanitization at API Boundary | Security Requirement | System / API | 3 | Sprint 1 | NFR-07 | N. Adil Ahmed (PES1UG24CS285) | Validate all inbound payloads (schemas, types, bounds) on client and server to prevent malformed or injection inputs. Supports TC-16. |
-| **NFR-05** | Responsive and Usable User Interface | Non-Functional Requirement | Frontend UI | 3 | Sprint 1 | NFR-07 | N. Adil Ahmed (PES1UG24CS285) | Ensure all client views are clean, intuitive, and mobile/desktop responsive. Supports TC-12. |
-| **NFR-01** | Event Listing Page Performance Optimization (< 3s) | Non-Functional Requirement | Performance | 2 | Sprint 1 | FR-02, NFR-07 | N. Adil Ahmed (PES1UG24CS285) | Optimize queries, pagination, and payload size so event listing loads in under 3 seconds under normal load. Supports TC-10. |
-| **FR-09** | Organizer Event Announcements and Updates Broadcast | Functional Requirement | Organizer / Attendee | 3 | Sprint 2 | FR-07, FR-08 | Saketh Narayanam (PES1UG24CS292) | Allow organizers to send announcements/updates to registered participants and attendees to view notifications. Supports UC-10, UC-16, TC-17. |
-| **FR-10** | Organizer Registration Reports Generation | Functional Requirement | Organizer | 3 | Sprint 2 | FR-08 | Saketh Narayanam (PES1UG24CS292) | Allow organizers to generate and export summary and participant registration reports for their events. Supports UC-20, TC-15. |
-| **FR-11** | Administrator Management of Users, Organizers, and Events | Functional Requirement | Administrator | 5 | Sprint 2 | FR-01, FR-07, SEC-05 | Neeraj R Gowda (PES1UG24CS295) | Allow administrators to view and manage users and organizers, and moderate/remove inappropriate events. Supports UC-17, UC-18, UC-19, TC-09, TC-18. |
-| **SEC-05** | Administrative Privilege and Route Protection | Security Requirement | Administrator / Security | 3 | Sprint 2 | FR-11, SEC-02 | Neeraj R Gowda (PES1UG24CS295) | Strictly restrict administrative routes, moderation actions, and user privilege elevation to verified admin accounts. Supports TC-09, TC-18. |
-| **NFR-02** | Registration Processing Latency Optimization (< 2s) | Non-Functional Requirement | Performance | 2 | Sprint 2 | FR-04, NFR-06 | Likhith Reddy M (PES1UG24CS282) | Tune registration endpoints, index lookups, and transaction boundaries to process valid registrations within 2 seconds. Supports TC-10. |
-| **TEST-E2E** | End-to-End System Testing and Test Plan Execution | Quality Assurance | QA / Team | 5 | Sprint 2 | Sprint 1 & Sprint 2 items | Likhith Reddy M (PES1UG24CS282) | Execute the 18 test cases from 12_Test_Cases.docx across Chrome/Firefox/Edge, document results, and verify RTM traceability. |
-| **DEV-CICD** | GitHub Actions CI/CD and Pull Request Automation | DevOps / Automation | Repository | 3 | Sprint 2 | NFR-07 | N. Adil Ahmed (PES1UG24CS285) | Configure GitHub Actions workflow for linting, testing, and verifying PR checks per Deliverables Part-2 section 2b. |
-| **DOC-DEMO** | Final Documentation, Bug Fix Artifacts, and Demo Video | Project Governance | All Team Roles | 5 | Sprint 2 | TEST-E2E, DEV-CICD | N. Adil Ahmed (PES1UG24CS285) | Assemble repository folder structure (01-09), record 2-minute final demo video, document AI-assisted bug fix, freeze development cycle. |
+| SRS Req ID | Requirement Description | Related Use Cases | Test Case ID | Backlog / Issue ID | Epic |
+|---|---|---|---|---|---|
+| **FR-01** | Create account & login | UC-04, UC-05 | TC-01, TC-02 | Issue #2 ([FR-01]) | Epic 1 |
+| **FR-02** | Browse & search/filter events | UC-01, UC-02 | TC-03 | Issue #6 ([FR-02]) | Epic 2 |
+| **FR-03** | View event details | UC-03 | TC-03 | Issue #7 ([FR-03]) | Epic 2 |
+| **FR-04** | Register & check capacity | UC-06 | TC-04, TC-05 | Issue #10 ([FR-04]) | Epic 3 |
+| **FR-05** | Prevent duplicate & cancel registration | UC-06, UC-07 | TC-06, TC-07 | Issue #11 ([FR-05]) | Epic 3 |
+| **FR-06** | View registered events dashboard | UC-08 | TC-07 | Issue #12 ([FR-06]) | Epic 3 |
+| **FR-07** | Create, edit, cancel events | UC-11, UC-12, UC-13 | TC-08 | Issue #8 ([FR-07]) | Epic 2 |
+| **FR-08** | Set capacity & view participants | UC-14, UC-15 | TC-08, TC-13 | Issue #9 ([FR-08]) | Epic 2 |
+| **FR-09** | Send updates & broadcast notifications | UC-10, UC-16 | TC-17 | Issue #18 ([FR-09]) | Epic 4 |
+| **FR-10** | Generate organizer registration reports | UC-20 | TC-15 | Issue #19 ([FR-10]) | Epic 4 |
+| **FR-11** | Manage users, organizers & events | UC-17, UC-18, UC-19 | TC-09, TC-18 | Issue #20 ([FR-11]) | Epic 5 |
+| **NFR-01** | Event listing loads within 3s | UC-01 | TC-10 | Issue #17 ([NFR-01]) | Epic 6 |
+| **NFR-02** | Registration completes within 2s | UC-06 | TC-10 | Issue #22 ([NFR-02]) | Epic 6 |
+| **NFR-03** | Passwords never stored in plain text | UC-04, UC-05 | TC-11 | Issue #3 ([SEC-01]) | Epic 1 |
+| **NFR-04** | Protected functions require authorization | Protected UCs | TC-02, TC-09, TC-15 | Issue #4 ([SEC-02]) | Epic 1 |
+| **NFR-05** | Responsive & accessible interface | All UI UCs | TC-12 | Issue #16 ([NFR-05]) | Epic 6 |
+| **NFR-06** | Consistent event & registration data | UC-06, UC-07 | TC-13 | Issue #13 ([NFR-06]) | Epic 3 |
+| **NFR-07** | Modular client-server components | System Arch | TC-14 | Issue #14 ([NFR-07]) | Epic 6 |
+| **SEC-01** | Secure password hashing (bcrypt) | UC-04, UC-05 | TC-11 | Issue #3 ([SEC-01]) | Epic 1 |
+| **SEC-02** | Role-based access control (RBAC) | UC-05, Protected UCs | TC-02, TC-09 | Issue #4 ([SEC-02]) | Epic 1 |
+| **SEC-03** | Inbound payload validation/sanitization | All API mutations | TC-16 | Issue #15 ([SEC-03]) | Epic 6 |
+| **SEC-04** | Secure session handling & token expiry | UC-05, Protected UCs | TC-02, TC-16 | Issue #5 ([SEC-04]) | Epic 1 |
+| **SEC-05** | Admin access & privilege restriction | UC-17, UC-18, UC-19 | TC-09, TC-18 | Issue #21 ([SEC-05]) | Epic 5 |
