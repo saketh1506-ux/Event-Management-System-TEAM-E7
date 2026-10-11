@@ -1,0 +1,57 @@
+# Event Management System - GitHub Product Backlog & Sprint Plan
+
+**Team E7:**
+- Saketh Narayanam – PES1UG24CS292
+- Neeraj R Gowda – PES1UG24CS295
+- Likhith Reddy M – PES1UG24CS282
+- N. Adil Ahmed – PES1UG24CS285
+
+**Course:** Software Engineering Mini-Project Deliverables Part-2
+**Repository:** [https://github.com/saketh1506-ux/Event-Management-System-TEAM-E7](https://github.com/saketh1506-ux/Event-Management-System-TEAM-E7)
+
+---
+
+## Summary of Backlog Estimation & Allocation
+- **Total Backlog Items:** 24
+- **Total Story Points:** 83 points
+- **Sprint 1 (19–23 Oct 2026):** 16 items | 54 story points
+- **Sprint 2 (26–30 Oct 2026):** 8 items | 29 story points
+
+### Story Point Distribution across Team Members:
+| Team Member | PRN | Sprint 1 Pts | Sprint 2 Pts | Total Pts | Assigned Functional Focus |
+|---|---|---|---|---|---|
+| Saketh Narayanam | PES1UG24CS292 | 13 | 6 | 19 | Authentication, Session Security & Reporting |
+| Neeraj R Gowda | PES1UG24CS295 | 16 | 8 | 24 | Event Discovery, Organizer Ops & Admin Module |
+| Likhith Reddy M | PES1UG24CS282 | 14 | 7 | 21 | Registration Engine, Capacity Rules & E2E Testing |
+| N. Adil Ahmed | PES1UG24CS285 | 11 | 8 | 19 | Layered Architecture, Security Input Guard & CI/CD |
+
+---
+
+## Detailed Backlog Table
+
+| Backlog ID | Title | Type | Target Actor | Story Pts | Sprint | Dependencies | Assignee | Description & Traceability |
+|---|---|---|---|---|---|---|---|---|
+| **FR-01** | User Registration and Authentication | Functional Requirement | Visitor / User / Attendee | 5 | Sprint 1 | None | Saketh Narayanam (PES1UG24CS292) | Allow users to register with name, email, password, and log in securely. Supports UC-04, UC-05, TC-01, TC-02. |
+| **SEC-01** | Password Hashing and Storage Protection | Security Requirement | System / All | 3 | Sprint 1 | None | Saketh Narayanam (PES1UG24CS292) | Passwords shall be hashed using secure one-way hashing (e.g. bcrypt/argon2) and never stored as plain text. Supports NFR-03, TC-11. |
+| **SEC-02** | Authentication and Role-Based Authorization Guard | Security Requirement | System / All | 3 | Sprint 1 | FR-01, SEC-01 | Saketh Narayanam (PES1UG24CS292) | Protected endpoints require JWT/session authentication and role-based checks (Visitor, Attendee, Organizer, Admin). Supports NFR-04, TC-02, TC-09. |
+| **SEC-04** | Secure Session Management and Token Expiry | Security Requirement | System / All | 2 | Sprint 1 | SEC-02 | Saketh Narayanam (PES1UG24CS292) | Reject expired or unauthorized tokens/sessions safely and require re-login. Supports TC-16. |
+| **FR-02** | Event Browsing, Search, and Category Filtering | Functional Requirement | Visitor / User / Attendee | 5 | Sprint 1 | None | Neeraj R Gowda (PES1UG24CS295) | Allow visitors and users to browse public events, search by title/keywords, and filter by categories/date. Supports UC-01, UC-02, TC-03. |
+| **FR-03** | Event Details View | Functional Requirement | Visitor / User / Attendee | 3 | Sprint 1 | FR-02 | Neeraj R Gowda (PES1UG24CS295) | Display event details including title, date, time, location, description, organizer, and capacity. Supports UC-03, TC-03. |
+| **FR-07** | Organizer Event Creation, Editing, and Cancellation | Functional Requirement | Organizer | 5 | Sprint 1 | FR-01, SEC-02 | Neeraj R Gowda (PES1UG24CS295) | Allow authenticated organizers to create new events, update details of their events, and cancel events. Supports UC-11, UC-12, UC-13, TC-08. |
+| **FR-08** | Event Capacity Configuration and Participant List View | Functional Requirement | Organizer | 3 | Sprint 1 | FR-07 | Neeraj R Gowda (PES1UG24CS295) | Allow organizers to define maximum event capacity and view registered participants. Supports UC-14, UC-15, TC-08. |
+| **FR-04** | Event Registration and Full-Capacity Rejection | Functional Requirement | User / Attendee | 5 | Sprint 1 | FR-01, FR-03, FR-08 | Likhith Reddy M (PES1UG24CS282) | Allow authenticated attendees to register for an event; automatically reject registration when capacity is full. Supports UC-06, TC-04, TC-05. |
+| **FR-05** | Duplicate Registration Prevention and Registration Cancellation | Functional Requirement | User / Attendee | 3 | Sprint 1 | FR-04 | Likhith Reddy M (PES1UG24CS282) | Prevent a user from registering twice for the same event and allow attendees to cancel existing registrations. Supports UC-06, UC-07, TC-06, TC-07. |
+| **FR-06** | Attendee Registered Events Dashboard | Functional Requirement | User / Attendee | 3 | Sprint 1 | FR-04 | Likhith Reddy M (PES1UG24CS282) | Allow registered users to view a list of all events they have registered for. Supports UC-08, TC-07. |
+| **NFR-06** | Data Consistency for Event Capacities and Registrations | Non-Functional Requirement | System / Database | 3 | Sprint 1 | FR-04, FR-05 | Likhith Reddy M (PES1UG24CS282) | Maintain atomic registration counts and transactional consistency under concurrent registrations and cancellations. Supports TC-13. |
+| **NFR-07** | Modular Client-Server Component Architecture | Non-Functional Requirement | Architecture | 3 | Sprint 1 | None | N. Adil Ahmed (PES1UG24CS285) | Implement layered architecture: React.js UI, Express.js REST API layer, isolated Data Access/DB layer. Supports TC-14, 09_Software_Architecture. |
+| **SEC-03** | Input Validation and Sanitization at API Boundary | Security Requirement | System / API | 3 | Sprint 1 | NFR-07 | N. Adil Ahmed (PES1UG24CS285) | Validate all inbound payloads (schemas, types, bounds) on client and server to prevent malformed or injection inputs. Supports TC-16. |
+| **NFR-05** | Responsive and Usable User Interface | Non-Functional Requirement | Frontend UI | 3 | Sprint 1 | NFR-07 | N. Adil Ahmed (PES1UG24CS285) | Ensure all client views are clean, intuitive, and mobile/desktop responsive. Supports TC-12. |
+| **NFR-01** | Event Listing Page Performance Optimization (< 3s) | Non-Functional Requirement | Performance | 2 | Sprint 1 | FR-02, NFR-07 | N. Adil Ahmed (PES1UG24CS285) | Optimize queries, pagination, and payload size so event listing loads in under 3 seconds under normal load. Supports TC-10. |
+| **FR-09** | Organizer Event Announcements and Updates Broadcast | Functional Requirement | Organizer / Attendee | 3 | Sprint 2 | FR-07, FR-08 | Saketh Narayanam (PES1UG24CS292) | Allow organizers to send announcements/updates to registered participants and attendees to view notifications. Supports UC-10, UC-16, TC-17. |
+| **FR-10** | Organizer Registration Reports Generation | Functional Requirement | Organizer | 3 | Sprint 2 | FR-08 | Saketh Narayanam (PES1UG24CS292) | Allow organizers to generate and export summary and participant registration reports for their events. Supports UC-20, TC-15. |
+| **FR-11** | Administrator Management of Users, Organizers, and Events | Functional Requirement | Administrator | 5 | Sprint 2 | FR-01, FR-07, SEC-05 | Neeraj R Gowda (PES1UG24CS295) | Allow administrators to view and manage users and organizers, and moderate/remove inappropriate events. Supports UC-17, UC-18, UC-19, TC-09, TC-18. |
+| **SEC-05** | Administrative Privilege and Route Protection | Security Requirement | Administrator / Security | 3 | Sprint 2 | FR-11, SEC-02 | Neeraj R Gowda (PES1UG24CS295) | Strictly restrict administrative routes, moderation actions, and user privilege elevation to verified admin accounts. Supports TC-09, TC-18. |
+| **NFR-02** | Registration Processing Latency Optimization (< 2s) | Non-Functional Requirement | Performance | 2 | Sprint 2 | FR-04, NFR-06 | Likhith Reddy M (PES1UG24CS282) | Tune registration endpoints, index lookups, and transaction boundaries to process valid registrations within 2 seconds. Supports TC-10. |
+| **TEST-E2E** | End-to-End System Testing and Test Plan Execution | Quality Assurance | QA / Team | 5 | Sprint 2 | Sprint 1 & Sprint 2 items | Likhith Reddy M (PES1UG24CS282) | Execute the 18 test cases from 12_Test_Cases.docx across Chrome/Firefox/Edge, document results, and verify RTM traceability. |
+| **DEV-CICD** | GitHub Actions CI/CD and Pull Request Automation | DevOps / Automation | Repository | 3 | Sprint 2 | NFR-07 | N. Adil Ahmed (PES1UG24CS285) | Configure GitHub Actions workflow for linting, testing, and verifying PR checks per Deliverables Part-2 section 2b. |
+| **DOC-DEMO** | Final Documentation, Bug Fix Artifacts, and Demo Video | Project Governance | All Team Roles | 5 | Sprint 2 | TEST-E2E, DEV-CICD | N. Adil Ahmed (PES1UG24CS285) | Assemble repository folder structure (01-09), record 2-minute final demo video, document AI-assisted bug fix, freeze development cycle. |
