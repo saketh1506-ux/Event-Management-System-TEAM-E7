@@ -190,3 +190,25 @@ Event-Management-System-TEAM-E7/
     ├── 12_Test_Cases.docx
     ├── 13_Requirements_Traceability_Matrix.docx
     └── 14_Validation_and_Testing_Summary.docx
+
+---
+
+## 10. Product Backlog & Sprint Execution Plan (Part-2)
+
+- **Total Backlog Items:** 24
+- **Total Story Points:** 83 points
+- **Sprint 1 (19–23 Oct 2026):** 16 items | 54 story points
+- **Sprint 2 (26–30 Oct 2026):** 8 items | 29 story points
+- **Sprint Dry Run Period:** 12th Oct to 16th Oct 2026
+- **Live GitHub Project Board:** [Event Management System - Team E7 Project Board](https://github.com/users/saketh1506-ux/projects/2)
+- **Detailed Backlog Document:** [BACKLOG.md](BACKLOG.md)
+- **Exported Backlog CSV:** [acklog_event_management_system.csv](backlog_event_management_system.csv)
+
+### Team Member Workload Allocation
+
+| Team Member | GitHub Username | PRN | Sprint 1 Pts | Sprint 2 Pts | Total Pts | Assigned Focus Area |
+|---|---|---|---|---|---|---|
+| **Saketh Narayanam** | @saketh1506-ux | PES1UG24CS292 | 13 | 6 | 19 | User Auth, Password Security, Session Handling, Reports |
+| **Neeraj R Gowda** | @neerajrgowda8558-arch | PES1UG24CS295 | 16 | 8 | 24 | Event Discovery, Search/Filter, Organizer CRUD, Admin Module |
+| **Likhith Reddy M** | @52likhith | PES1UG24CS282 | 14 | 7 | 21 | Registration Engine, Capacity Validation, E2E Test Suite |
+| **N. Adil Ahmed** | @adilahmed55 | PES1UG24CS285 | 11 | 8 | 19 | Modular Architecture, Security Guards, Responsive UI, CI/CD |
