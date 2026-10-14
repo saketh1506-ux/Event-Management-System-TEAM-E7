@@ -10,6 +10,8 @@
 - Likhith Reddy M – PES1UG24CS282
 - N. Adil Ahmed – PES1UG24CS285
 
+- SEC: E
+
 ---
 
 ## 1. Project Overview
