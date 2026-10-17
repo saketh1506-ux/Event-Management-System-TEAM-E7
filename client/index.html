@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event Management System | Team E7</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <!-- Navigation Header -->
+  <header class="navbar">
+    <div class="brand" onclick="app.navigate('home')">
+      <i class="fa-solid fa-calendar-star" style="color: #6366f1;"></i>
+      <span>EventHub</span>
+      <span class="badge-team">Team E7</span>
+    </div>
+    <nav class="nav-links">
+      <button class="nav-btn active" id="nav-events-btn" onclick="app.navigate('home')">
+        <i class="fa-regular fa-calendar-days"></i> Explore Events
+      </button>
+      
+      <!-- Logged in Attendee Links -->
+      <button class="nav-btn" id="nav-my-events-btn" style="display: none;" onclick="app.navigate('my-events')">
+        <i class="fa-solid fa-ticket"></i> My Registrations
+      </button>
+
+      <!-- Organizer Links -->
+      <button class="nav-btn" id="nav-organizer-btn" style="display: none;" onclick="app.navigate('organizer')">
+        <i class="fa-solid fa-chart-line"></i> Organizer Dashboard
+      </button>
+
+      <!-- Admin Links -->
+      <button class="nav-btn" id="nav-admin-btn" style="display: none;" onclick="app.navigate('admin')">
+        <i class="fa-solid fa-shield-halved"></i> Admin Console
+      </button>
+
+      <!-- Auth Controls -->
+      <div id="auth-controls" style="display: flex; gap: 0.5rem; align-items: center;">
+        <button class="btn-secondary" onclick="app.showModal('login-modal')">Log In</button>
+        <button class="btn-primary" onclick="app.showModal('register-modal')">Sign Up</button>
+      </div>
+
+      <div id="user-profile-controls" style="display: none; align-items: center; gap: 0.75rem;">
+        <span id="user-display-name" style="font-weight: 600; color: #a5b4fc; font-size: 0.9rem;"></span>
+        <span id="user-role-badge" style="font-size: 0.75rem; background: rgba(255,255,255,0.1); padding: 0.2rem 0.5rem; border-radius: 4px;"></span>
+        <button class="btn-secondary" onclick="app.logout()"><i class="fa-solid fa-right-from-bracket"></i></button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Main Container -->
+  <main class="container">
+    
+    <!-- Home / Explore View -->
+    <section id="view-home">
+      <div class="hero">
+        <h1>Discover, Register & Host Unforgettable Events</h1>
+        <p>Built for students, organizers, and administrators with real-time capacity management, duplicate-prevention, and instant updates.</p>
+        
+        <div class="filters-bar">
+          <input type="text" id="search-input" class="search-input" placeholder="Search events by title, topic, or venue..." oninput="app.debouncedSearch()">
+          <select id="category-filter" class="filter-select" onchange="app.filterEvents()">
+            <option value="All">All Categories</option>
+            <option value="Technology">Technology</option>
+            <option value="Workshop">Workshop</option>
+            <option value="Hackathon">Hackathon</option>
+            <option value="Seminar">Seminar</option>
+            <option value="Cultural">Cultural</option>
+          </select>
+          <button class="btn-secondary" onclick="app.fetchEvents()"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+        </div>
+      </div>
+
+      <div id="events-list" class="events-grid">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- My Registered Events View -->
+    <section id="view-my-events" style="display: none;">
+      <div style="margin-top: 2rem;">
+        <h2>My Event Registrations</h2>
+        <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Track and manage your upcoming registered sessions or cancel anytime.</p>
+        
+        <!-- Live Notifications Banner -->
+        <div id="updates-banner" style="margin-bottom: 2rem;"></div>
+
+        <div id="my-events-list" class="events-grid"></div>
+      </div>
+    </section>
+
+    <!-- Organizer Dashboard View -->
+    <section id="view-organizer" style="display: none;">
+      <div style="margin-top: 2rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <div>
+          <h2>Organizer Studio</h2>
+          <p style="color: var(--text-muted);">Manage events, monitor live capacity, and broadcast participant updates.</p>
+        </div>
+        <button class="btn-primary" onclick="app.showModal('create-event-modal')">
+          <i class="fa-solid fa-plus"></i> Create New Event
+        </button>
+      </div>
+
+      <div id="organizer-events-list" class="events-grid"></div>
+    </section>
+
+    <!-- Admin Console View -->
+    <section id="view-admin" style="display: none;">
+      <div style="margin-top: 2rem;">
+        <h2>System Administration & Control Center</h2>
+        <p style="color: var(--text-muted); margin-bottom: 1.5rem;">System-level metrics, user privilege management, and event governance.</p>
+
+        <!-- Stats Overview Cards -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div>Total Users</div>
+            <div class="stat-value" id="stat-total-users">-</div>
+          </div>
+          <div class="stat-card">
+            <div>Organizers</div>
+            <div class="stat-value" id="stat-total-orgs">-</div>
+          </div>
+          <div class="stat-card">
+            <div>Active Events</div>
+            <div class="stat-value" id="stat-total-events">-</div>
+          </div>
+          <div class="stat-card">
+            <div>Total Registrations</div>
+            <div class="stat-value" id="stat-total-regs">-</div>
+          </div>
+        </div>
+
+        <h3 style="margin-top: 2rem; margin-bottom: 1rem;">Platform Users & Roles</h3>
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="admin-users-table"></tbody>
+          </table>
+        </div>
+
+        <h3 style="margin-top: 2.5rem; margin-bottom: 1rem;">Capacity & Utilization Reports</h3>
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th>Category</th>
+                <th>Organizer</th>
+                <th>Capacity</th>
+                <th>Confirmed</th>
+                <th>Occupancy %</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="admin-reports-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Login Modal -->
+  <div id="login-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Log In to EventHub</h2>
+        <button class="modal-close" onclick="app.hideModal('login-modal')">&times;</button>
+      </div>
+      <form id="login-form" onsubmit="app.handleLogin(event)">
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="login-email" class="form-control" placeholder="admin@ems.com / user@ems.com" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="login-password" class="form-control" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn-primary" style="width: 100%; margin-top: 1rem;">Log In</button>
+        <p style="font-size: 0.85rem; color: var(--text-muted); text-align: center; margin-top: 1rem;">
+          Quick Logins for testing:<br>
+          Admin: <code>admin@ems.com</code> / <code>Admin@123</code><br>
+          Organizer: <code>organizer@ems.com</code> / <code>Org@123</code><br>
+          Attendee: <code>likhith@ems.com</code> / <code>User@123</code>
+        </p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Register Modal -->
+  <div id="register-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Create an Account</h2>
+        <button class="modal-close" onclick="app.hideModal('register-modal')">&times;</button>
+      </div>
+      <form id="register-form" onsubmit="app.handleRegister(event)">
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" id="reg-name" class="form-control" placeholder="John Doe" required>
+        </div>
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="reg-email" class="form-control" placeholder="john@example.com" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="reg-password" class="form-control" placeholder="At least 6 characters" minlength="6" required>
+        </div>
+        <div class="form-group">
+          <label>Account Type</label>
+          <select id="reg-role" class="form-control">
+            <option value="user">Attendee (Register for events)</option>
+            <option value="organizer">Organizer (Host & manage events)</option>
+          </select>
+        </div>
+        <button type="submit" class="btn-primary" style="width: 100%; margin-top: 1rem;">Create Account</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Create Event Modal -->
+  <div id="create-event-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Host a New Event</h2>
+        <button class="modal-close" onclick="app.hideModal('create-event-modal')">&times;</button>
+      </div>
+      <form id="create-event-form" onsubmit="app.handleCreateEvent(event)">
+        <div class="form-group">
+          <label>Event Title</label>
+          <input type="text" id="event-title" class="form-control" placeholder="e.g. AI & Cloud Architecture Summit" required>
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select id="event-category" class="form-control">
+            <option value="Technology">Technology</option>
+            <option value="Workshop">Workshop</option>
+            <option value="Hackathon">Hackathon</option>
+            <option value="Seminar">Seminar</option>
+            <option value="Cultural">Cultural</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="event-desc" class="form-control" rows="3" placeholder="Provide event details, schedule and requirements..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Location / Venue</label>
+          <input type="text" id="event-location" class="form-control" placeholder="e.g. Main Auditorium or Virtual Meeting link" required>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label>Date</label>
+            <input type="date" id="event-date" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label>Time</label>
+            <input type="text" id="event-time" class="form-control" placeholder="10:00 AM" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Maximum Participant Capacity</label>
+          <input type="number" id="event-capacity" class="form-control" min="1" max="10000" placeholder="50" required>
+        </div>
+        <button type="submit" class="btn-primary" style="width: 100%; margin-top: 1rem;">Publish Event</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Event Details & Roster Modal -->
+  <div id="details-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 650px;">
+      <div class="modal-header">
+        <h2 id="modal-event-title">Event Details</h2>
+        <button class="modal-close" onclick="app.hideModal('details-modal')">&times;</button>
+      </div>
+      <div id="modal-event-body"></div>
+    </div>
+  </div>
+
+  <!-- Broadcast Update Modal -->
+  <div id="broadcast-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Send Event Announcement</h2>
+        <button class="modal-close" onclick="app.hideModal('broadcast-modal')">&times;</button>
+      </div>
+      <form id="broadcast-form" onsubmit="app.handleSendUpdate(event)">
+        <input type="hidden" id="broadcast-event-id">
+        <div class="form-group">
+          <label>Announcement Title</label>
+          <input type="text" id="broadcast-title" class="form-control" placeholder="e.g. Venue Room Update" required>
+        </div>
+        <div class="form-group">
+          <label>Message Content</label>
+          <textarea id="broadcast-message" class="form-control" rows="4" placeholder="Important update for all registered attendees..." required></textarea>
+        </div>
+        <button type="submit" class="btn-primary" style="width: 100%;">Broadcast to Registered Attendees</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
