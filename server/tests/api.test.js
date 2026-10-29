@@ -180,6 +180,88 @@ test('TC-05: Reject registration when event is full (FR-04)', async () => {
   assert.match(reg2.body.error, /full capacity/i);
 });
 
+test('TC-05A: Concurrent registrations cannot exceed capacity (FR-04)', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+
+  const createRes = await request('POST', '/api/events', {
+    title: `Concurrent Capacity Boundary ${Date.now()}`,
+    description: 'Testing simultaneous registration requests',
+    category: 'Workshop',
+    location: 'Online',
+    date: '2026-12-02',
+    time: '12:00 PM',
+    capacity: 1
+  }, orgLogin.body.token);
+  assert.strictEqual(createRes.status, 201);
+  const eventId = createRes.body.event.id;
+
+  const user1Login = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  const user2Login = await request('POST', '/api/auth/login', {
+    email: 'adil@ems.com',
+    password: 'User@123'
+  });
+  assert.strictEqual(user1Login.status, 200);
+  assert.strictEqual(user2Login.status, 200);
+
+  const responses = await Promise.all([
+    request('POST', `/api/events/${eventId}/register`, {}, user1Login.body.token),
+    request('POST', `/api/events/${eventId}/register`, {}, user2Login.body.token)
+  ]);
+  const statuses = responses.map(response => response.status).sort();
+
+  assert.deepStrictEqual(statuses, [201, 400].sort());
+  assert.ok(responses.some(response => response.status === 400 && /full capacity/i.test(response.body.error)));
+
+  const detailRes = await request('GET', `/api/events/${eventId}`);
+  assert.strictEqual(detailRes.status, 200);
+  assert.strictEqual(detailRes.body.event.registered_count, 1);
+  assert.strictEqual(detailRes.body.event.spots_left, 0);
+});
+
+test('TC-07A: Re-register after cancellation (FR-05)', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+
+  const createRes = await request('POST', '/api/events', {
+    title: `Re-registration Test ${Date.now()}`,
+    description: 'Testing registration cancellation and reactivation',
+    category: 'Workshop',
+    location: 'Online',
+    date: '2026-12-03',
+    time: '01:00 PM',
+    capacity: 2
+  }, orgLogin.body.token);
+  assert.strictEqual(createRes.status, 201);
+  const eventId = createRes.body.event.id;
+
+  const userLogin = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  assert.strictEqual(userLogin.status, 200);
+  const token = userLogin.body.token;
+
+  const firstRegistration = await request('POST', `/api/events/${eventId}/register`, {}, token);
+  assert.strictEqual(firstRegistration.status, 201);
+
+  const cancellation = await request('DELETE', `/api/events/${eventId}/register`, {}, token);
+  assert.strictEqual(cancellation.status, 200);
+
+  const reRegistration = await request('POST', `/api/events/${eventId}/register`, {}, token);
+  assert.strictEqual(reRegistration.status, 201);
+  assert.strictEqual(reRegistration.body.registration.status, 'confirmed');
+});
+
 test('TC-08: Organizer creates event and sets capacity (FR-07, FR-08)', async () => {
   const orgLogin = await request('POST', '/api/auth/login', {
     email: 'organizer@ems.com',
