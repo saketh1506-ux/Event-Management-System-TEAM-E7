@@ -11,7 +11,28 @@ class App {
 
   init() {
     this.updateAuthUI();
+    this.verifySession();
     this.fetchEvents();
+  }
+
+  async verifySession() {
+    if (!this.token) return;
+    try {
+      const res = await fetch(`${API_BASE}/auth/me`, {
+        headers: { 'Authorization': `Bearer ${this.token}` }
+      });
+      if (res.status === 401) {
+        // Token has expired or been revoked; silently reset stale session
+        this.token = null;
+        this.currentUser = null;
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        this.updateAuthUI();
+        this.toast('Session expired or invalidated. Please sign in again.', 'info');
+      }
+    } catch (err) {
+      // Network failure, skip
+    }
   }
 
   // --- Auth & State ---
@@ -98,7 +119,25 @@ class App {
     }
   }
 
-  logout() {
+  async logout() {
+    if (this.token) {
+      try {
+        const res = await fetch(`${API_BASE}/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.token}`
+          }
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          console.warn('Backend logout response not OK:', data.error);
+        }
+      } catch (err) {
+        console.error('Network error during backend logout:', err);
+      }
+    }
+
     this.token = null;
     this.currentUser = null;
     localStorage.removeItem('token');

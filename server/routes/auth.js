@@ -3,7 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
-const { JWT_SECRET, authenticateToken } = require('../middleware/auth');
+const { JWT_SECRET, authenticateToken, revokeToken } = require('../middleware/auth');
 
 // POST /api/auth/register (FR-01, TC-01)
 router.post('/register', (req, res) => {
@@ -114,6 +114,17 @@ router.get('/me', authenticateToken, (req, res) => {
     return res.status(200).json({ user });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to fetch user profile.' });
+  }
+});
+
+// POST /api/auth/logout (Secure Session Termination - SEC-04)
+router.post('/logout', authenticateToken, (req, res) => {
+  try {
+    revokeToken(req.token, req.user ? req.user.id : null, req.user ? req.user.exp : null);
+    return res.status(200).json({ message: 'Logout successful. Session terminated.' });
+  } catch (err) {
+    console.error('Logout error:', err);
+    return res.status(500).json({ error: 'Failed to securely invalidate session.' });
   }
 });
 

@@ -68,6 +68,16 @@ function initDb() {
     );
   `);
 
+  // Revoked / Blacklisted tokens table for secure session management (SEC-04)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS revoked_tokens (
+      token_hash TEXT PRIMARY KEY,
+      user_id INTEGER,
+      expires_at DATETIME,
+      revoked_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   // Seed default accounts if empty
   const userCount = db.prepare('SELECT count(*) as count FROM users').get().count;
   if (userCount === 0) {
