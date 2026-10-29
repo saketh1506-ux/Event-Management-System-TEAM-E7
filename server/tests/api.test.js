@@ -4,6 +4,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const db = require('../db');
 const app = require('../server');
 const { JWT_SECRET } = require('../middleware/auth');
 
@@ -379,4 +381,152 @@ test('SEC-04-06: Logged-out token cannot perform state mutations (401)', async (
   const regRes = await request('POST', '/api/events/1/register', {}, token);
   assert.strictEqual(regRes.status, 401);
   assert.match(regRes.body.error, /revoked|invalid/i);
+});
+// --- Additional security validation ---
+
+test('SEC-05-01: Seeded user passwords are stored as bcrypt hashes, never plaintext', () => {
+  const plaintextPasswords = {
+    'admin@ems.com': 'Admin@123',
+    'organizer@ems.com': 'Org@123',
+    'neeraj@ems.com': 'Org@123',
+    'likhith@ems.com': 'User@123',
+    'adil@ems.com': 'User@123'
+  };
+
+  for (const [email, plaintextPassword] of Object.entries(plaintextPasswords)) {
+    const user = db.prepare('SELECT password FROM users WHERE email = ?').get(email);
+    assert.ok(user, `${email} should be seeded`);
+    assert.notStrictEqual(user.password, plaintextPassword);
+    assert.match(user.password, /^\$2[aby]\$\d{2}\$/);
+    assert.strictEqual(bcrypt.compareSync(plaintextPassword, user.password), true);
+  }
+});
+
+test('SEC-05-02: SQL injection login and malformed input are rejected without side effects', async () => {
+  const userCountBefore = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
+  const eventCountBefore = db.prepare('SELECT COUNT(*) AS count FROM events').get().count;
+
+  const injectionRes = await request('POST', '/api/auth/login', {
+    email: "' OR 1=1--",
+    password: 'anything'
+  });
+  assert.strictEqual(injectionRes.status, 401);
+
+  const malformedEmailRes = await request('POST', '/api/auth/register', {
+    name: 'Malformed Input Test',
+    email: "security' OR '1'='1@example.com",
+    password: 'Password123'
+  });
+  assert.strictEqual(malformedEmailRes.status, 400);
+
+  const organizerLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(organizerLogin.status, 200);
+
+  const invalidCapacityRes = await request('POST', '/api/events', {
+    title: "' OR 1=1--",
+    description: "DROP TABLE users;--",
+    category: 'Security',
+    location: 'Online',
+    date: '2026-12-04',
+    time: '10:00 AM',
+    capacity: "1; DROP TABLE users;"
+  }, organizerLogin.body.token);
+  assert.strictEqual(invalidCapacityRes.status, 400);
+
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS count FROM users').get().count, userCountBefore);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS count FROM events').get().count, eventCountBefore);
+});
+
+test('SEC-05-03: Administrator can change a temporary user role; non-admin is denied', async () => {
+  const uniqueEmail = `security_admin_${Date.now()}@example.com`;
+  let temporaryUserId;
+
+  try {
+    const registration = await request('POST', '/api/auth/register', {
+      name: 'Temporary Security User',
+      email: uniqueEmail,
+      password: 'Password123'
+    });
+    assert.strictEqual(registration.status, 201);
+    temporaryUserId = registration.body.user.id;
+
+    const adminLogin = await request('POST', '/api/auth/login', {
+      email: 'admin@ems.com',
+      password: 'Admin@123'
+    });
+    assert.strictEqual(adminLogin.status, 200);
+
+    const adminAction = await request(
+      'PATCH',
+      `/api/admin/users/${temporaryUserId}/role`,
+      { role: 'organizer' },
+      adminLogin.body.token
+    );
+    assert.strictEqual(adminAction.status, 200);
+    assert.strictEqual(
+      db.prepare('SELECT role FROM users WHERE id = ?').get(temporaryUserId).role,
+      'organizer'
+    );
+
+    const attendeeDenied = await request('PATCH',
+      `/api/admin/users/${temporaryUserId}/role`,
+      { role: 'admin' },
+      registration.body.token
+    );
+    assert.strictEqual(attendeeDenied.status, 403);
+    assert.strictEqual(
+      db.prepare('SELECT role FROM users WHERE id = ?').get(temporaryUserId).role,
+      'organizer'
+    );
+  } finally {
+    if (temporaryUserId) {
+      db.prepare('DELETE FROM users WHERE id = ?').run(temporaryUserId);
+    }
+  }
+});
+
+test('SEC-05-04: Failed validation and authorization requests leave database unchanged', async () => {
+  const before = {
+    users: db.prepare('SELECT COUNT(*) AS count FROM users').get().count,
+    events: db.prepare('SELECT COUNT(*) AS count FROM events').get().count
+  };
+
+  const invalidRegistration = await request('POST', '/api/auth/register', {
+    name: '',
+    email: 'missing-name@example.com',
+    password: 'Password123'
+  });
+  assert.strictEqual(invalidRegistration.status, 400);
+
+  const userLogin = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  assert.strictEqual(userLogin.status, 200);
+
+  const unauthorizedAdmin = await request(
+    'GET',
+    '/api/admin/users',
+    null,
+    userLogin.body.token
+  );
+  assert.strictEqual(unauthorizedAdmin.status, 403);
+
+  const invalidAdminRole = await request(
+    'PATCH',
+    '/api/admin/users/4/role',
+    { role: 'superadmin' },
+    (await request('POST', '/api/auth/login', {
+      email: 'admin@ems.com',
+      password: 'Admin@123'
+    })).body.token
+  );
+  assert.strictEqual(invalidAdminRole.status, 400);
+  assert.strictEqual(db.prepare('SELECT role FROM users WHERE id = 4').get().role, 'user');
+
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS count FROM users').get().count, before.users);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS count FROM events').get().count, before.events);
 });
