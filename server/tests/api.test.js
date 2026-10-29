@@ -1,13 +1,36 @@
 process.env.NODE_ENV = 'test';
 
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const db = require('../db');
+
+const temporaryTestDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'ems-api-tests-'));
+const testDatabasePath = path.join(temporaryTestDirectory, 'database.sqlite');
+const persistentDatabasePath = path.resolve(__dirname, '..', 'database.sqlite');
+
+assert.notStrictEqual(testDatabasePath, persistentDatabasePath);
+process.env.EMS_DATABASE_PATH = testDatabasePath;
+
+let db;
+db = require('../db');
 const app = require('../server');
 const { JWT_SECRET } = require('../middleware/auth');
+
+assert.strictEqual(path.resolve(db._emsConfiguredDbPath), path.resolve(testDatabasePath));
+assert.notStrictEqual(path.resolve(db._emsConfiguredDbPath), persistentDatabasePath);
+console.log(`API test database: ${testDatabasePath}`);
+
+function cleanupTemporaryTestDatabase() {
+  if (db && db.open) db.close();
+  fs.rmSync(temporaryTestDirectory, { recursive: true, force: true });
+}
+
+process.once('exit', cleanupTemporaryTestDatabase);
 
 let server;
 let baseUrl;
@@ -61,6 +84,8 @@ test.after(async () => {
   if (server && server.listening) {
     await new Promise(resolve => server.close(resolve));
   }
+
+  cleanupTemporaryTestDatabase();
 });
 
 test('TC-01: Create account with valid details (FR-01)', async () => {
@@ -120,6 +145,7 @@ test('TC-04, TC-06, TC-07: Register, Prevent Duplicate, and Cancel registration 
     // Duplicate registration attempt (TC-06)
     const dupRes = await request('POST', '/api/events/1/register', {}, userToken);
     assert.strictEqual(dupRes.status, 409);
+    assert.match(dupRes.body.error, /already registered/i);
 
     // Cancel registration (TC-07)
     const cancelRes = await request('DELETE', '/api/events/1/register', {}, userToken);
@@ -127,6 +153,7 @@ test('TC-04, TC-06, TC-07: Register, Prevent Duplicate, and Cancel registration 
   } else {
     // Already registered, test duplicate rejection directly
     assert.strictEqual(regRes.status, 409);
+    assert.match(regRes.body.error, /already registered/i);
     // Cancel it
     const cancelRes = await request('DELETE', '/api/events/1/register', {}, userToken);
     assert.strictEqual(cancelRes.status, 200);
@@ -250,14 +277,97 @@ test('TC-07A: Re-register after cancellation (FR-05)', async () => {
     email: 'likhith@ems.com',
     password: 'User@123'
   });
+  const otherUserLogin = await request('POST', '/api/auth/login', {
+    email: 'adil@ems.com',
+    password: 'User@123'
+  });
   assert.strictEqual(userLogin.status, 200);
+  assert.strictEqual(otherUserLogin.status, 200);
   const token = userLogin.body.token;
 
   const firstRegistration = await request('POST', `/api/events/${eventId}/register`, {}, token);
   assert.strictEqual(firstRegistration.status, 201);
 
+  const beforeCancellation = await request('GET', `/api/events/${eventId}`);
+  assert.strictEqual(beforeCancellation.status, 200);
+
+  const unauthorizedCancellation = await request(
+    'DELETE',
+    `/api/events/${eventId}/register`,
+    {},
+    otherUserLogin.body.token
+  );
+  assert.strictEqual(unauthorizedCancellation.status, 404);
+
+  const afterFailedCancellation = await request('GET', `/api/events/${eventId}`);
+  assert.strictEqual(afterFailedCancellation.status, 200);
+  assert.strictEqual(
+    afterFailedCancellation.body.event.registered_count,
+    beforeCancellation.body.event.registered_count
+  );
+  assert.strictEqual(
+    afterFailedCancellation.body.event.spots_left,
+    beforeCancellation.body.event.spots_left
+  );
+
+  const activeRegistration = db.prepare(`
+    SELECT status FROM registrations
+    WHERE event_id = ? AND user_id = ?
+  `).get(eventId, userLogin.body.user.id);
+  assert.strictEqual(activeRegistration.status, 'confirmed');
+
+  const registrationId = db.prepare(`
+    SELECT id FROM registrations
+    WHERE event_id = ? AND user_id = ? AND status = 'confirmed'
+  `).get(eventId, userLogin.body.user.id).id;
+  const failureTriggerName = `fail_cancellation_${Date.now()}`;
+
+  try {
+    db.exec(`
+      CREATE TRIGGER ${failureTriggerName}
+      BEFORE UPDATE OF status ON registrations
+      WHEN OLD.id = ${registrationId}
+        AND NEW.status = 'cancelled'
+        AND OLD.status = 'confirmed'
+      BEGIN
+        SELECT RAISE(ABORT, 'forced cancellation failure');
+      END;
+    `);
+
+    const ownerFailure = await request('DELETE', `/api/events/${eventId}/register`, {}, token);
+    assert.strictEqual(ownerFailure.status, 500);
+
+    const afterOwnerFailure = await request('GET', `/api/events/${eventId}`);
+    assert.strictEqual(afterOwnerFailure.status, 200);
+    assert.strictEqual(
+      afterOwnerFailure.body.event.registered_count,
+      beforeCancellation.body.event.registered_count
+    );
+    assert.strictEqual(
+      afterOwnerFailure.body.event.spots_left,
+      beforeCancellation.body.event.spots_left
+    );
+    assert.strictEqual(
+      db.prepare('SELECT status FROM registrations WHERE id = ?').get(registrationId).status,
+      'confirmed'
+    );
+  } finally {
+    db.prepare(`DROP TRIGGER IF EXISTS ${failureTriggerName}`).run();
+  }
+
   const cancellation = await request('DELETE', `/api/events/${eventId}/register`, {}, token);
   assert.strictEqual(cancellation.status, 200);
+
+  const afterCancellation = await request('GET', `/api/events/${eventId}`);
+  assert.strictEqual(afterCancellation.status, 200);
+  assert.strictEqual(
+    afterCancellation.body.event.registered_count,
+    beforeCancellation.body.event.registered_count - 1
+  );
+  assert.strictEqual(
+    afterCancellation.body.event.spots_left,
+    beforeCancellation.body.event.spots_left + 1
+  );
 
   const reRegistration = await request('POST', `/api/events/${eventId}/register`, {}, token);
   assert.strictEqual(reRegistration.status, 201);
