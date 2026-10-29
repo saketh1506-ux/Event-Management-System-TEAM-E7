@@ -61,23 +61,23 @@ The system provides different functionality based on the user's role:
 
 ## 3. Documentation
 
-The `source_documents` folder contains the project documentation for Part 1.
+The [`docs/`](docs/) directory contains the project documentation for Part 1.
 
 | Document | Description |
 |---|---|
-| `01_Problem_Statement.docx` | Defines the problem addressed by the system |
-| `02_Feasibility_Analysis.docx` | Describes the feasibility of the proposed system |
-| `03_Project_Scope.docx` | Defines the scope and boundaries of the project |
-| `04_Software_Requirements_Specification.docx` | Contains the software requirements and UML use-case model |
-| `05_Security_Objectives_and_Requirements.docx` | Defines security objectives and security requirements |
-| `06_Use_Case_Model.docx` | Describes the system use cases and actors |
-| `08_Software_Test_Plan.docx` | Defines the testing approach and test planning |
-| `09_Software_Architecture.docx` | Describes the software architecture and components |
-| `10_Detailed_Design_Sequence_Diagrams.docx` | Contains detailed design and sequence diagrams |
-| `11_API_and_Error_Handling.docx` | Describes API design and error handling |
-| `12_Test_Cases.docx` | Contains functional and security test cases |
-| `13_Requirements_Traceability_Matrix.docx` | Maps requirements to use cases and test cases |
-| `14_Validation_and_Testing_Summary.docx` | Summarizes requirements validation and testing |
+| [`01_Problem_Statement.docx`](docs/01_Problem_Statement.docx) | Defines the problem addressed by the system |
+| [`02_Feasibility_Analysis.docx`](docs/02_Feasibility_Analysis.docx) | Describes the feasibility of the proposed system |
+| [`03_Project_Scope.docx`](docs/03_Project_Scope.docx) | Defines the scope and boundaries of the project |
+| [`04_Software_Requirements_Specification.docx`](docs/04_Software_Requirements_Specification.docx) | Contains the software requirements and UML use-case model |
+| [`05_Security_Objectives_and_Requirements.docx`](docs/05_Security_Objectives_and_Requirements.docx) | Defines security objectives and security requirements |
+| [`06_Use_Case_Model.docx`](docs/06_Use_Case_Model.docx) | Describes the system use cases and actors |
+| [`08_Software_Test_Plan.docx`](docs/08_Software_Test_Plan.docx) | Defines the testing approach and test planning |
+| [`09_Software_Architecture.docx`](docs/09_Software_Architecture.docx) | Describes the software architecture and components |
+| [`10_Detailed_Design_Sequence_Diagrams.docx`](docs/10_Detailed_Design_Sequence_Diagrams.docx) | Contains detailed design and sequence diagrams |
+| [`11_API_and_Error_Handling.docx`](docs/11_API_and_Error_Handling.docx) | Describes API design and error handling |
+| [`12_Test_Cases.docx`](docs/12_Test_Cases.docx) | Contains functional and security test cases |
+| [`13_Requirements_Traceability_Matrix.docx`](docs/13_Requirements_Traceability_Matrix.docx) | Maps requirements to use cases and test cases |
+| [`14_Validation_and_Testing_Summary.docx`](docs/14_Validation_and_Testing_Summary.docx) | Summarizes requirements validation and testing |
 
 ---
 
@@ -105,13 +105,9 @@ The system has four primary actors:
 - **Organizer**
 - **Administrator**
 
-The complete UML use-case diagram is provided in:
+The complete UML use-case diagram is provided in [Use_Case_Diagram.png](Use_Case_Diagram.png).
 
-`Use_Case_Diagram.png`
-
-The detailed use-case descriptions are provided in:
-
-`06_Use_Case_Model.docx`
+The detailed use-case descriptions are provided in [docs/06_Use_Case_Model.docx](docs/06_Use_Case_Model.docx).
 
 ---
 
@@ -131,13 +127,11 @@ Testing covers:
 - Registration reporting
 - Administrator functions
 
-The test cases are documented in:
+The automated suite is run from `server/tests/api.test.js`. Passing API tests demonstrate backend coverage only; browser, performance, usability, and remaining planned test cases require separate verification and evidence.
 
-`12_Test_Cases.docx`
+The test cases are documented in [docs/12_Test_Cases.docx](docs/12_Test_Cases.docx).
 
-The testing approach is documented in:
-
-`08_Software_Test_Plan.docx`
+The testing approach is documented in [docs/08_Software_Test_Plan.docx](docs/08_Software_Test_Plan.docx).
 
 ---
 
@@ -152,9 +146,7 @@ The system defines security requirements covering:
 - Session security
 - Administrator access control
 
-Security objectives and requirements are documented in:
-
-`05_Security_Objectives_and_Requirements.docx`
+Security objectives and requirements are documented in [docs/05_Security_Objectives_and_Requirements.docx](docs/05_Security_Objectives_and_Requirements.docx).
 
 ---
 
@@ -162,11 +154,9 @@ Security objectives and requirements are documented in:
 
 Requirements are traced through the project documentation to maintain consistency between:
 
-**Requirements → Use Cases → Architecture/Design → Test Cases**
+**Requirements -> Use Cases -> Architecture/Design -> Test Cases**
 
-The complete traceability mapping is provided in:
-
-`13_Requirements_Traceability_Matrix.docx`
+The complete traceability mapping is provided in [docs/13_Requirements_Traceability_Matrix.docx](docs/13_Requirements_Traceability_Matrix.docx).
 
 ---
 
@@ -174,24 +164,27 @@ The complete traceability mapping is provided in:
 
 ```text
 Event-Management-System-TEAM-E7/
-│
-├── README.md
-├── Use_Case_Diagram.png
-│
-└── source_documents/
-    ├── 01_Problem_Statement.docx
-    ├── 02_Feasibility_Analysis.docx
-    ├── 03_Project_Scope.docx
-    ├── 04_Software_Requirements_Specification.docx
-    ├── 05_Security_Objectives_and_Requirements.docx
-    ├── 06_Use_Case_Model.docx
-    ├── 08_Software_Test_Plan.docx
-    ├── 09_Software_Architecture.docx
-    ├── 10_Detailed_Design_Sequence_Diagrams.docx
-    ├── 11_API_and_Error_Handling.docx
-    ├── 12_Test_Cases.docx
-    ├── 13_Requirements_Traceability_Matrix.docx
-    └── 14_Validation_and_Testing_Summary.docx
+|-- .github/
+|   `-- workflows/
+|       `-- api-tests.yml
+|-- client/
+|-- docs/
+|   `-- Part 1 Word documents (listed in Documentation above)
+|-- JIRA/
+|-- server/
+|   |-- routes/
+|   |-- tests/
+|   |   `-- api.test.js
+|   |-- db.js
+|   |-- package.json
+|   `-- package-lock.json
+|-- BACKLOG.md
+|-- IMPLEMENTATION.md
+|-- README.md
+|-- Use_Case_Diagram.png
+|-- IEEE_Event_Management_System.pdf
+`-- backlog_event_management_system.csv
+```
 
 ---
 
@@ -204,7 +197,7 @@ Event-Management-System-TEAM-E7/
 - **Sprint Dry Run Period:** 12th Oct to 16th Oct 2026
 - **Live GitHub Project Board:** [Event Management System - Team E7 Project Board](https://github.com/users/saketh1506-ux/projects/2)
 - **Detailed Backlog Document:** [BACKLOG.md](BACKLOG.md)
-- **Exported Backlog CSV:** [acklog_event_management_system.csv](backlog_event_management_system.csv)
+- **Exported Backlog CSV:** [backlog_event_management_system.csv](backlog_event_management_system.csv)
 
 ### Team Member Workload Allocation
 
