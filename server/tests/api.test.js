@@ -1,7 +1,11 @@
+process.env.NODE_ENV = 'test';
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const jwt = require('jsonwebtoken');
 const app = require('../server');
+const { JWT_SECRET } = require('../middleware/auth');
 
 let server;
 let baseUrl;
@@ -9,10 +13,13 @@ let baseUrl;
 function request(method, path, body = null, token = null) {
   return new Promise((resolve, reject) => {
     const url = new URL(path, baseUrl);
-    const headers = { 'Content-Type': 'application/json' };
+    const headers = { 
+      'Content-Type': 'application/json',
+      'Connection': 'close'
+    };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const req = http.request(url, { method, headers }, (res) => {
+    const req = http.request(url, { method, headers, agent: false }, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
@@ -25,24 +32,33 @@ function request(method, path, body = null, token = null) {
       });
     });
 
-    req.on('error', reject);
+    req.on('error', (err) => {
+      reject(new Error(`${method} ${path} failed: ${err.message}`, { cause: err }));
+    });
+
     if (body) req.write(JSON.stringify(body));
     req.end();
   });
 }
 
 test.before(async () => {
-  await new Promise((resolve) => {
-    server = app.listen(0, () => {
-      const port = server.address().port;
-      baseUrl = `http://localhost:${port}`;
+  await new Promise((resolve, reject) => {
+    server = app.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        return reject(new Error('Could not get test server address'));
+      }
+      baseUrl = `http://127.0.0.1:${address.port}`;
       resolve();
     });
+    server.on('error', reject);
   });
 });
 
 test.after(async () => {
-  await new Promise(resolve => server.close(resolve));
+  if (server && server.listening) {
+    await new Promise(resolve => server.close(resolve));
+  }
 });
 
 test('TC-01: Create account with valid details (FR-01)', async () => {
@@ -124,11 +140,12 @@ test('TC-05: Reject registration when event is full (FR-04)', async () => {
     email: 'organizer@ems.com',
     password: 'Org@123'
   });
+  assert.strictEqual(orgLogin.status, 200);
   const orgToken = orgLogin.body.token;
 
-  // Create event with capacity 1
+  // Create event with capacity 1 and dynamic title to avoid collision
   const createRes = await request('POST', '/api/events', {
-    title: 'Limited Capacity Masterclass',
+    title: `Limited Capacity Masterclass ${Date.now()}`,
     description: 'Testing capacity limit boundary',
     category: 'Workshop',
     location: 'Online',
@@ -150,6 +167,9 @@ test('TC-05: Reject registration when event is full (FR-04)', async () => {
     password: 'User@123'
   });
 
+  assert.strictEqual(user1.status, 200);
+  assert.strictEqual(user2.status, 200);
+
   // User 1 fills the only spot
   const reg1 = await request('POST', `/api/events/${eventId}/register`, {}, user1.body.token);
   assert.strictEqual(reg1.status, 201);
@@ -165,10 +185,11 @@ test('TC-08: Organizer creates event and sets capacity (FR-07, FR-08)', async ()
     email: 'organizer@ems.com',
     password: 'Org@123'
   });
+  assert.strictEqual(orgLogin.status, 200);
   const orgToken = orgLogin.body.token;
 
   const eventData = {
-    title: 'Cloud Architecture Summit',
+    title: `Cloud Architecture Summit ${Date.now()}`,
     description: 'Architecting for resiliency',
     category: 'Seminar',
     location: 'PESU Convention Center',
@@ -188,9 +209,92 @@ test('TC-09: Block unauthorized admin access (FR-10, NFR-04)', async () => {
     email: 'likhith@ems.com',
     password: 'User@123'
   });
+  assert.strictEqual(userLogin.status, 200);
   const userToken = userLogin.body.token;
 
   // Attempting admin route with standard user token
   const res = await request('GET', '/api/admin/users', null, userToken);
   assert.strictEqual(res.status, 403);
+});
+
+// --- SEC-04: Secure Session Handling & Token Expiry ---
+
+test('SEC-04-01: Protected endpoint rejects request when token is missing (401)', async () => {
+  const res = await request('GET', '/api/auth/me');
+  assert.strictEqual(res.status, 401);
+  assert.match(res.body.error, /access token required/i);
+});
+
+test('SEC-04-02: Protected endpoint rejects invalid or tampered token (401)', async () => {
+  const res = await request('GET', '/api/auth/me', null, 'this.is.an.invalid.token');
+  assert.strictEqual(res.status, 401);
+  assert.match(res.body.error, /invalid or expired token/i);
+});
+
+test('SEC-04-03: Protected endpoint rejects expired token (401)', async () => {
+  // Sign token that expired 1 hour ago
+  const expiredToken = jwt.sign(
+    { id: 4, name: 'Likhith Reddy', email: 'likhith@ems.com', role: 'user' },
+    JWT_SECRET,
+    { expiresIn: '-1h' }
+  );
+
+  const res = await request('GET', '/api/auth/me', null, expiredToken);
+  assert.strictEqual(res.status, 401);
+  assert.match(res.body.error, /invalid or expired token/i);
+});
+
+test('SEC-04-04: Valid token authenticates correct user on protected endpoint (200)', async () => {
+  const loginRes = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  assert.strictEqual(loginRes.status, 200);
+  const token = loginRes.body.token;
+
+  const res = await request('GET', '/api/auth/me', null, token);
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.user.email, 'likhith@ems.com');
+  assert.strictEqual(res.body.user.role, 'user');
+});
+
+test('SEC-04-05: Secure logout succeeds and revokes token in persistent database (200)', async () => {
+  const loginRes = await request('POST', '/api/auth/login', {
+    email: 'adil@ems.com',
+    password: 'User@123'
+  });
+  assert.strictEqual(loginRes.status, 200);
+  const token = loginRes.body.token;
+
+  // Verify token works before logout
+  const beforeRes = await request('GET', '/api/auth/me', null, token);
+  assert.strictEqual(beforeRes.status, 200);
+  assert.strictEqual(beforeRes.body.user.email, 'adil@ems.com');
+
+  // Perform secure logout
+  const logoutRes = await request('POST', '/api/auth/logout', {}, token);
+  assert.strictEqual(logoutRes.status, 200);
+  assert.match(logoutRes.body.message, /logout successful|session terminated/i);
+
+  // Attempting to use the revoked token must now be rejected (401)
+  const afterRes = await request('GET', '/api/auth/me', null, token);
+  assert.strictEqual(afterRes.status, 401);
+  assert.match(afterRes.body.error, /revoked|invalid/i);
+});
+
+test('SEC-04-06: Logged-out token cannot perform state mutations (401)', async () => {
+  const loginRes = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  const token = loginRes.body.token;
+
+  // Logout
+  const logoutRes = await request('POST', '/api/auth/logout', {}, token);
+  assert.strictEqual(logoutRes.status, 200);
+
+  // Mutation attempt on event registration
+  const regRes = await request('POST', '/api/events/1/register', {}, token);
+  assert.strictEqual(regRes.status, 401);
+  assert.match(regRes.body.error, /revoked|invalid/i);
 });
