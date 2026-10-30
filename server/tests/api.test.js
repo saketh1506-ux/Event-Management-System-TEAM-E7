@@ -1,5 +1,5 @@
 process.env.NODE_ENV = 'test';
-process.env.DATABASE_PATH = require('node:path').join(
+process.env.EMS_DATABASE_PATH = require('node:path').join(
   require('node:os').tmpdir(),
   `ems-api-test-${process.pid}-${Date.now()}.sqlite`
 );
@@ -68,7 +68,7 @@ test.after(async () => {
   }
   db.close();
   for (const suffix of ['', '-wal', '-shm']) {
-    const file = `${process.env.DATABASE_PATH}${suffix}`;
+    const file = `${process.env.EMS_DATABASE_PATH}${suffix}`;
     if (fs.existsSync(file)) fs.unlinkSync(file);
   }
 });
