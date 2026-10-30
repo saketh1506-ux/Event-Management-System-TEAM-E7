@@ -258,48 +258,58 @@ router.post('/:id/register', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'Cannot register for a cancelled event.' });
     }
 
-    // Check existing registration
-    const existingReg = db.prepare(`
-      SELECT * FROM registrations WHERE event_id = ? AND user_id = ?
-    `).get(eventId, userId);
+    const registrationTransaction = db.transaction(() => {
+      const existingReg = db.prepare(`
+        SELECT * FROM registrations WHERE event_id = ? AND user_id = ?
+      `).get(eventId, userId);
 
-    if (existingReg && existingReg.status === 'confirmed') {
-      return res.status(409).json({ error: 'You are already registered for this event.' });
-    }
+      if (existingReg && existingReg.status === 'confirmed') {
+        const error = new Error('You are already registered for this event.');
+        error.status = 409;
+        throw error;
+      }
 
-    // Check capacity
-    const currentCount = getRegistrationCount(eventId);
-    if (currentCount >= event.capacity) {
-      return res.status(400).json({
-        error: 'Event is at full capacity. No more seats available.'
-      });
-    }
+      const currentCount = getRegistrationCount(eventId);
+      if (currentCount >= event.capacity) {
+        const error = new Error('Event is at full capacity. No more seats available.');
+        error.status = 400;
+        throw error;
+      }
 
-    if (existingReg && existingReg.status === 'cancelled') {
-      // Re-activate registration
-      db.prepare(`
-        UPDATE registrations
-        SET status = 'confirmed', updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(existingReg.id);
-    } else {
-      db.prepare(`
-        INSERT INTO registrations (event_id, user_id, status)
-        VALUES (?, ?, 'confirmed')
-      `).run(eventId, userId);
-    }
+      if (existingReg && existingReg.status === 'cancelled') {
+        db.prepare(`
+          UPDATE registrations
+          SET status = 'confirmed', updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(existingReg.id);
+      } else {
+        db.prepare(`
+          INSERT INTO registrations (event_id, user_id, status)
+          VALUES (?, ?, 'confirmed')
+        `).run(eventId, userId);
+      }
 
-    const updatedCount = currentCount + 1;
+      return {
+        currentCount,
+        spotsLeft: Math.max(0, event.capacity - currentCount - 1)
+      };
+    });
+
+    const { spotsLeft } = registrationTransaction.immediate();
     return res.status(201).json({
       message: 'Registration successful! Confirmation has been recorded.',
       registration: {
         event_id: Number(eventId),
         user_id: userId,
         status: 'confirmed',
-        spots_left: Math.max(0, event.capacity - updatedCount)
+        spots_left: spotsLeft
       }
     });
   } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+
     console.error('Register error:', err);
     return res.status(500).json({ error: 'Failed to register for event.' });
   }
