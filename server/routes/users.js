@@ -18,18 +18,21 @@ router.get('/me/events', authenticateToken, (req, res) => {
       ORDER BY r.registered_at DESC
     `).all(userId);
 
-    // Also get any updates for events the user is confirmed for
-    const eventIds = registeredEvents.map(e => e.id);
+    // Also get any updates ONLY for events where the user has a confirmed registration (FR-09)
+    const confirmedEventIds = registeredEvents
+      .filter(r => r.registration_status === 'confirmed')
+      .map(e => e.id);
+
     let notifications = [];
-    if (eventIds.length > 0) {
-      const placeholders = eventIds.map(() => '?').join(',');
+    if (confirmedEventIds.length > 0) {
+      const placeholders = confirmedEventIds.map(() => '?').join(',');
       notifications = db.prepare(`
         SELECT u.*, e.title as event_title
         FROM event_updates u
         JOIN events e ON u.event_id = e.id
         WHERE u.event_id IN (${placeholders})
         ORDER BY u.sent_at DESC
-      `).all(...eventIds);
+      `).all(...confirmedEventIds);
     }
 
     return res.status(200).json({

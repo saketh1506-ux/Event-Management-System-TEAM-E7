@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { authenticateToken, authorizeRoles } = require('../middleware/auth');
+const { authenticateToken, optionalAuthenticate, authorizeRoles } = require('../middleware/auth');
 
 // Helper to get registration count for an event
 function getRegistrationCount(eventId) {
@@ -64,7 +64,7 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/events/:id (FR-03, UC-03) - View event details
-router.get('/:id', (req, res) => {
+router.get('/:id', optionalAuthenticate, (req, res) => {
   try {
     const eventId = req.params.id;
     const event = db.prepare(`
@@ -79,9 +79,25 @@ router.get('/:id', (req, res) => {
       return res.status(404).json({ error: 'Event not found.' });
     }
 
-    const updates = db.prepare(`
-      SELECT * FROM event_updates WHERE event_id = ? ORDER BY sent_at DESC
-    `).all(eventId);
+    // Only confirmed attendees, the event organizer, or an admin can access restricted event updates (FR-09)
+    let updates = [];
+    if (req.user) {
+      const isOwnerOrAdmin = req.user.role === 'admin' || event.organizer_id === req.user.id;
+      let isRegistered = false;
+      if (!isOwnerOrAdmin) {
+        const reg = db.prepare(`
+          SELECT id FROM registrations
+          WHERE event_id = ? AND user_id = ? AND status = 'confirmed'
+        `).get(eventId, req.user.id);
+        isRegistered = !!reg;
+      }
+
+      if (isOwnerOrAdmin || isRegistered) {
+        updates = db.prepare(`
+          SELECT * FROM event_updates WHERE event_id = ? ORDER BY sent_at DESC
+        `).all(eventId);
+      }
+    }
 
     return res.status(200).json({
       event: {
@@ -373,8 +389,8 @@ router.post('/:id/updates', authenticateToken, authorizeRoles('organizer', 'admi
   const eventId = req.params.id;
   const { title, message } = req.body;
 
-  if (!title || !message) {
-    return res.status(400).json({ error: 'Update title and message are required.' });
+  if (!title || typeof title !== 'string' || !title.trim() || !message || typeof message !== 'string' || !message.trim()) {
+    return res.status(400).json({ error: 'Update title and message are required and cannot be empty.' });
   }
 
   try {

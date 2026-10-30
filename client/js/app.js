@@ -547,7 +547,11 @@ class App {
 
   async viewEventDetails(eventId) {
     try {
-      const res = await fetch(`${API_BASE}/events/${eventId}`);
+      const headers = {};
+      if (this.token) {
+        headers['Authorization'] = `Bearer ${this.token}`;
+      }
+      const res = await fetch(`${API_BASE}/events/${eventId}`, { headers });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
