@@ -121,10 +121,12 @@ router.post('/', authenticateToken, authorizeRoles('organizer', 'admin'), (req, 
     return res.status(400).json({ error: 'Title, location, date, time, and capacity are required.' });
   }
 
-  const parsedCapacity = parseInt(capacity, 10);
-  if (isNaN(parsedCapacity) || parsedCapacity < 1) {
+  const capacityText = String(capacity);
+  if (!/^\d+$/.test(capacityText) || Number(capacityText) < 1) {
     return res.status(400).json({ error: 'Capacity must be a positive integer greater than or equal to 1.' });
   }
+
+  const parsedCapacity = Number(capacityText);
 
   try {
     const result = db.prepare(`
