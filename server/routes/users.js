@@ -14,7 +14,7 @@ router.get('/me/events', authenticateToken, (req, res) => {
       FROM registrations r
       JOIN events e ON r.event_id = e.id
       JOIN users u ON e.organizer_id = u.id
-      WHERE r.user_id = ?
+      WHERE r.user_id = ? AND r.status = 'confirmed'
       ORDER BY r.registered_at DESC
     `).all(userId);
 
