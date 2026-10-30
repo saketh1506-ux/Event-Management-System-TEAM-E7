@@ -298,3 +298,262 @@ test('SEC-04-06: Logged-out token cannot perform state mutations (401)', async (
   assert.strictEqual(regRes.status, 401);
   assert.match(regRes.body.error, /revoked|invalid/i);
 });
+// --- FR-09: Organizer Event Announcements & Broadcast Updates ---
+
+test('FR-09-01: An event owner (organizer) can publish a valid update', async () => {
+  // Login as organizer (Saketh Narayanam, id: 2)
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+  const orgToken = orgLogin.body.token;
+
+  // Create an event owned by this organizer
+  const eventRes = await request('POST', '/api/events', {
+    title: `FR09 Organizer Event ${Date.now()}`,
+    description: 'Event for announcement verification',
+    category: 'Workshop',
+    location: 'Auditorium 2',
+    date: '2026-12-15',
+    time: '02:00 PM',
+    capacity: 50
+  }, orgToken);
+  assert.strictEqual(eventRes.status, 201);
+  const eventId = eventRes.body.event.id;
+
+  // Publish update
+  const updateRes = await request('POST', `/api/events/${eventId}/updates`, {
+    title: 'Room Changed',
+    message: 'The session has been moved to Lab 402.'
+  }, orgToken);
+
+  assert.strictEqual(updateRes.status, 201);
+  assert.strictEqual(updateRes.body.update.title, 'Room Changed');
+  assert.strictEqual(updateRes.body.update.message, 'The session has been moved to Lab 402.');
+  assert.strictEqual(updateRes.body.update.event_id, eventId);
+});
+
+test('FR-09-02: An organizer cannot publish an update for another organizer\'s event (403)', async () => {
+  // Organizer 1 creates event
+  const org1Login = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  const org1Token = org1Login.body.token;
+
+  const eventRes = await request('POST', '/api/events', {
+    title: `Organizer 1 Event ${Date.now()}`,
+    description: 'Owned by organizer 1',
+    category: 'Seminar',
+    location: 'Hall A',
+    date: '2026-12-20',
+    time: '10:00 AM',
+    capacity: 40
+  }, org1Token);
+  assert.strictEqual(eventRes.status, 201);
+  const eventId = eventRes.body.event.id;
+
+  // Organizer 2 (Neeraj Gowda, id: 3) attempts to publish an update to Organizer 1's event
+  const org2Login = await request('POST', '/api/auth/login', {
+    email: 'neeraj@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(org2Login.status, 200);
+  const org2Token = org2Login.body.token;
+
+  const updateRes = await request('POST', `/api/events/${eventId}/updates`, {
+    title: 'Unauthorized Announcement',
+    message: 'This should be blocked.'
+  }, org2Token);
+
+  assert.strictEqual(updateRes.status, 403);
+  assert.match(updateRes.body.error, /not authorized/i);
+});
+
+test('FR-09-03: Publishing update without authentication is rejected (401)', async () => {
+  const updateRes = await request('POST', '/api/events/1/updates', {
+    title: 'No Token Update',
+    message: 'Anonymous update attempt'
+  });
+
+  assert.strictEqual(updateRes.status, 401);
+});
+
+test('FR-09-04: Publishing update with missing or whitespace-only title/message is rejected (400)', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  const orgToken = orgLogin.body.token;
+
+  // Missing title
+  const res1 = await request('POST', '/api/events/1/updates', {
+    message: 'Valid message without title'
+  }, orgToken);
+  assert.strictEqual(res1.status, 400);
+
+  // Whitespace-only title
+  const res2 = await request('POST', '/api/events/1/updates', {
+    title: '   ',
+    message: 'Valid message with whitespace title'
+  }, orgToken);
+  assert.strictEqual(res2.status, 400);
+
+  // Whitespace-only message
+  const res3 = await request('POST', '/api/events/1/updates', {
+    title: 'Valid Title',
+    message: '   \n  \t '
+  }, orgToken);
+  assert.strictEqual(res3.status, 400);
+});
+
+test('FR-09-05: Registered attendee can retrieve and view event updates via dashboard and details', async () => {
+  // Organizer creates event
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  const orgToken = orgLogin.body.token;
+
+  const eventRes = await request('POST', '/api/events', {
+    title: `Registered Attendee Test ${Date.now()}`,
+    description: 'Testing updates visibility for registered user',
+    category: 'Technology',
+    location: 'Main Hall',
+    date: '2026-12-18',
+    time: '03:00 PM',
+    capacity: 30
+  }, orgToken);
+  assert.strictEqual(eventRes.status, 201);
+  const eventId = eventRes.body.event.id;
+
+  // Post update
+  await request('POST', `/api/events/${eventId}/updates`, {
+    title: 'Important Preparation Info',
+    message: 'Please install Node.js v20+ before the workshop.'
+  }, orgToken);
+
+  // User logs in and registers
+  const userLogin = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  const userToken = userLogin.body.token;
+
+  const regRes = await request('POST', `/api/events/${eventId}/register`, {}, userToken);
+  assert.strictEqual(regRes.status, 201);
+
+  // 1. Check registered-events dashboard (/api/users/me/events)
+  const dashboardRes = await request('GET', '/api/users/me/events', null, userToken);
+  assert.strictEqual(dashboardRes.status, 200);
+  const notification = dashboardRes.body.notifications.find(n => n.event_id === eventId);
+  assert.ok(notification, 'Notification should appear on attendee dashboard');
+  assert.strictEqual(notification.title, 'Important Preparation Info');
+
+  // 2. Check event details endpoint (/api/events/:id) with attendee token
+  const detailRes = await request('GET', `/api/events/${eventId}`, null, userToken);
+  assert.strictEqual(detailRes.status, 200);
+  assert.ok(Array.isArray(detailRes.body.event.updates));
+  assert.strictEqual(detailRes.body.event.updates.length, 1);
+  assert.strictEqual(detailRes.body.event.updates[0].title, 'Important Preparation Info');
+});
+
+test('FR-09-06: Unregistered user cannot access restricted event updates', async () => {
+  // Organizer creates event and publishes update
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  const orgToken = orgLogin.body.token;
+
+  const eventRes = await request('POST', '/api/events', {
+    title: `Restricted Update Test ${Date.now()}`,
+    description: 'Updates must be restricted to registered attendees',
+    category: 'Technology',
+    location: 'Lab 2',
+    date: '2026-12-22',
+    time: '11:00 AM',
+    capacity: 25
+  }, orgToken);
+  const eventId = eventRes.body.event.id;
+
+  await request('POST', `/api/events/${eventId}/updates`, {
+    title: 'Confidential Access Link',
+    message: 'Meeting link: https://secret.meet/xyz'
+  }, orgToken);
+
+  // 1. Anonymous visitor browsing public event details
+  const publicRes = await request('GET', `/api/events/${eventId}`);
+  assert.strictEqual(publicRes.status, 200);
+  assert.strictEqual(publicRes.body.event.title, eventRes.body.event.title);
+  assert.deepStrictEqual(publicRes.body.event.updates, [], 'Public browsing must not expose restricted updates');
+
+  // 2. Authenticated user who is NOT registered for this event
+  const userLogin = await request('POST', '/api/auth/login', {
+    email: 'adil@ems.com',
+    password: 'User@123'
+  });
+  const userToken = userLogin.body.token;
+
+  // Check event details
+  const userDetailRes = await request('GET', `/api/events/${eventId}`, null, userToken);
+  assert.strictEqual(userDetailRes.status, 200);
+  assert.deepStrictEqual(userDetailRes.body.event.updates, [], 'Unregistered authenticated user must not access updates');
+
+  // Check user dashboard
+  const userDashboard = await request('GET', '/api/users/me/events', null, userToken);
+  assert.strictEqual(userDashboard.status, 200);
+  const forbiddenNotif = userDashboard.body.notifications.find(n => n.event_id === eventId);
+  assert.strictEqual(forbiddenNotif, undefined, 'Unregistered event update must not appear in user dashboard notifications');
+});
+
+test('FR-09-07: User who cancelled registration cannot access restricted event updates', async () => {
+  // Organizer creates event and publishes update
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  const orgToken = orgLogin.body.token;
+
+  const eventRes = await request('POST', '/api/events', {
+    title: `Cancelled User Test ${Date.now()}`,
+    description: 'Testing cancelled registration update restriction',
+    category: 'Technology',
+    location: 'Seminar Room',
+    date: '2026-12-28',
+    time: '04:00 PM',
+    capacity: 20
+  }, orgToken);
+  const eventId = eventRes.body.event.id;
+
+  await request('POST', `/api/events/${eventId}/updates`, {
+    title: 'Speaker Slide Decks',
+    message: 'Attached slide deck for registered participants'
+  }, orgToken);
+
+  // User registers then cancels
+  const userLogin = await request('POST', '/api/auth/login', {
+    email: 'adil@ems.com',
+    password: 'User@123'
+  });
+  const userToken = userLogin.body.token;
+
+  const regRes = await request('POST', `/api/events/${eventId}/register`, {}, userToken);
+  assert.strictEqual(regRes.status, 201);
+
+  // Cancel registration
+  const cancelRes = await request('DELETE', `/api/events/${eventId}/register`, {}, userToken);
+  assert.strictEqual(cancelRes.status, 200);
+
+  // 1. Event details should no longer expose updates
+  const detailRes = await request('GET', `/api/events/${eventId}`, null, userToken);
+  assert.strictEqual(detailRes.status, 200);
+  assert.deepStrictEqual(detailRes.body.event.updates, [], 'Cancelled attendee must not receive updates via details');
+
+  // 2. User dashboard notifications should not include updates for cancelled events
+  const dashboardRes = await request('GET', '/api/users/me/events', null, userToken);
+  assert.strictEqual(dashboardRes.status, 200);
+  const notif = dashboardRes.body.notifications.find(n => n.event_id === eventId);
+  assert.strictEqual(notif, undefined, 'Dashboard notifications must not include updates for cancelled registrations');
+});

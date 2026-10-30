@@ -54,6 +54,31 @@ function authenticateToken(req, res, next) {
   });
 }
 
+function optionalAuthenticate(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    req.user = null;
+    return next();
+  }
+
+  if (isTokenRevoked(token)) {
+    req.user = null;
+    return next();
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (!err && user) {
+      req.user = user;
+      req.token = token;
+    } else {
+      req.user = null;
+    }
+    next();
+  });
+}
+
 function authorizeRoles(...allowedRoles) {
   return (req, res, next) => {
     if (!req.user || !allowedRoles.includes(req.user.role)) {
@@ -68,6 +93,7 @@ function authorizeRoles(...allowedRoles) {
 module.exports = {
   JWT_SECRET,
   authenticateToken,
+  optionalAuthenticate,
   authorizeRoles,
   revokeToken,
   isTokenRevoked,
