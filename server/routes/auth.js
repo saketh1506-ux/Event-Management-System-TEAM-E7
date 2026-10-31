@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const db = require('../db');
 const { JWT_SECRET, authenticateToken, revokeToken } = require('../middleware/auth');
 
@@ -44,7 +45,7 @@ router.post('/register', (req, res) => {
     const token = jwt.sign(
       { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '24h', jwtid: crypto.randomUUID() }
     );
 
     return res.status(201).json({
@@ -84,7 +85,7 @@ router.post('/login', (req, res) => {
     const token = jwt.sign(
       { id: user.id, name: user.name, email: user.email, role: user.role },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '24h', jwtid: crypto.randomUUID() }
     );
 
     return res.status(200).json({

@@ -1,3 +1,4 @@
+
 process.env.NODE_ENV = 'test';
 
 const fs = require('node:fs');
@@ -42,7 +43,7 @@ function request(method, path, body = null, token = null) {
       'Content-Type': 'application/json',
       'Connection': 'close'
     };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (token) headers['Authorization'] = 'Bearer ' + token;
 
     const req = http.request(url, { method, headers, agent: false }, (res) => {
       let data = '';
@@ -86,6 +87,56 @@ test.after(async () => {
   }
 
   cleanupTemporaryTestDatabase();
+});
+
+test('FR-06: Registered events dashboard returns only confirmed registrations for the authenticated attendee', async () => {
+  const organizerId = db.prepare('SELECT id FROM users WHERE email = ?').get('organizer@ems.com').id;
+  const attendee = db.prepare('SELECT id FROM users WHERE email = ?').get('likhith@ems.com');
+  const otherAttendee = db.prepare('SELECT id FROM users WHERE email = ?').get('adil@ems.com');
+  const suffix = Date.now();
+  const insertEvent = db.prepare(`
+    INSERT INTO events (title, description, category, location, date, time, capacity, organizer_id, status)
+    VALUES (?, ?, 'Workshop', ?, ?, '10:00 AM', 50, ?, 'active')
+  `);
+  const confirmedEventId = insertEvent.run(`Dashboard Confirmed ${suffix}`, 'Confirmed dashboard event', 'Dashboard Hall A', '2026-12-10', organizerId).lastInsertRowid;
+  const cancelledEventId = insertEvent.run(`Dashboard Cancelled ${suffix}`, 'Cancelled dashboard event', 'Dashboard Hall B', '2026-12-11', organizerId).lastInsertRowid;
+  const otherEventId = insertEvent.run(`Dashboard Other ${suffix}`, 'Other attendee event', 'Dashboard Hall C', '2026-12-12', organizerId).lastInsertRowid;
+  const insertRegistration = db.prepare(`
+    INSERT INTO registrations (event_id, user_id, status) VALUES (?, ?, ?)
+  `);
+
+  insertRegistration.run(confirmedEventId, attendee.id, 'confirmed');
+  insertRegistration.run(cancelledEventId, attendee.id, 'cancelled');
+  insertRegistration.run(otherEventId, otherAttendee.id, 'confirmed');
+
+  try {
+    const login = await request('POST', '/api/auth/login', {
+      email: 'likhith@ems.com',
+      password: 'User@123'
+    });
+    assert.strictEqual(login.status, 200);
+
+    const unauthorized = await request('GET', '/api/users/me/events');
+    assert.strictEqual(unauthorized.status, 401);
+
+    const dashboard = await request('GET', '/api/users/me/events', null, login.body.token);
+    assert.strictEqual(dashboard.status, 200);
+    assert.ok(Array.isArray(dashboard.body.registrations));
+
+    const registrations = dashboard.body.registrations;
+    assert.ok(registrations.some(registration => registration.id === confirmedEventId));
+    assert.ok(!registrations.some(registration => registration.id === cancelledEventId));
+    assert.ok(!registrations.some(registration => registration.id === otherEventId));
+
+    const confirmed = registrations.find(registration => registration.id === confirmedEventId);
+    assert.strictEqual(confirmed.title, `Dashboard Confirmed ${suffix}`);
+    assert.strictEqual(confirmed.date, '2026-12-10');
+    assert.strictEqual(confirmed.location, 'Dashboard Hall A');
+    assert.strictEqual(confirmed.registration_status, 'confirmed');
+  } finally {
+    db.prepare('DELETE FROM registrations WHERE event_id IN (?, ?, ?)').run(confirmedEventId, cancelledEventId, otherEventId);
+    db.prepare('DELETE FROM events WHERE id IN (?, ?, ?)').run(confirmedEventId, cancelledEventId, otherEventId);
+  }
 });
 
 test('TC-01: Create account with valid details (FR-01)', async () => {
