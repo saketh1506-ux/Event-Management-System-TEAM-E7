@@ -307,6 +307,8 @@ class App {
 
   // --- Attendee Dashboard (FR-06) ---
   async fetchMyEvents() {
+    const container = document.getElementById('my-events-list');
+    container.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">Loading your registered events...</p>';
     try {
       const res = await fetch(`${API_BASE}/users/me/events`, {
         headers: { 'Authorization': `Bearer ${this.token}` }
@@ -331,7 +333,6 @@ class App {
         banner.innerHTML = '';
       }
 
-      const container = document.getElementById('my-events-list');
       if (data.registrations.length === 0) {
         container.innerHTML = `
           <div style="grid-column: 1/-1; text-align: center; padding: 3rem; background: var(--bg-card); border-radius: var(--radius);">
@@ -359,6 +360,7 @@ class App {
         </div>
       `).join('');
     } catch (err) {
+      container.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: var(--danger);">Unable to load registered events. Please try again.</p>';
       this.toast('Failed to load registered events.', 'error');
     }
   }
