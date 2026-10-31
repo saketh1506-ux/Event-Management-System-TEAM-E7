@@ -1,6 +1,9 @@
 const express = require('express');
+
 const router = express.Router();
+
 const db = require('../db');
+
 const { authenticateToken, optionalAuthenticate, authorizeRoles } = require('../middleware/auth');
 
 // Helper to get registration count for an event
@@ -9,13 +12,14 @@ function getRegistrationCount(eventId) {
     SELECT COUNT(*) as count FROM registrations
     WHERE event_id = ? AND status = 'confirmed'
   `).get(eventId);
+
   return row ? row.count : 0;
 }
 
 // GET /api/events (FR-02, UC-01, UC-02) - List, search, filter events
 router.get('/', (req, res) => {
   try {
-    const { search, category, status } = req.query;
+    const { search, category, status, date } = req.query;
 
     let query = `
       SELECT e.*, u.name as organizer_name, u.email as organizer_email,
@@ -34,11 +38,19 @@ router.get('/', (req, res) => {
       query += ` AND e.status != 'deleted'`;
     }
 
+    // Filter by category
     if (category && category !== 'All') {
       query += ` AND e.category = ?`;
       params.push(category);
     }
 
+    // Filter by exact event date
+    if (date) {
+      query += ` AND e.date = ?`;
+      params.push(date);
+    }
+
+    // Search by title, description, or location
     if (search && search.trim() !== '') {
       query += ` AND (e.title LIKE ? OR e.description LIKE ? OR e.location LIKE ?)`;
       const term = `%${search.trim()}%`;
@@ -57,6 +69,7 @@ router.get('/', (req, res) => {
     }));
 
     return res.status(200).json({ events: formattedEvents });
+
   } catch (err) {
     console.error('Fetch events error:', err);
     return res.status(500).json({ error: 'Failed to retrieve events.' });
@@ -67,6 +80,7 @@ router.get('/', (req, res) => {
 router.get('/:id', optionalAuthenticate, (req, res) => {
   try {
     const eventId = req.params.id;
+
     const event = db.prepare(`
       SELECT e.*, u.name as organizer_name, u.email as organizer_email,
         (SELECT COUNT(*) FROM registrations r WHERE r.event_id = e.id AND r.status = 'confirmed') as registered_count
@@ -81,14 +95,17 @@ router.get('/:id', optionalAuthenticate, (req, res) => {
 
     // Only confirmed attendees, the event organizer, or an admin can access restricted event updates (FR-09)
     let updates = [];
+
     if (req.user) {
       const isOwnerOrAdmin = req.user.role === 'admin' || event.organizer_id === req.user.id;
       let isRegistered = false;
+
       if (!isOwnerOrAdmin) {
         const reg = db.prepare(`
           SELECT id FROM registrations
           WHERE event_id = ? AND user_id = ? AND status = 'confirmed'
         `).get(eventId, req.user.id);
+
         isRegistered = !!reg;
       }
 
@@ -107,6 +124,7 @@ router.get('/:id', optionalAuthenticate, (req, res) => {
         updates
       }
     });
+
   } catch (err) {
     console.error('Fetch event detail error:', err);
     return res.status(500).json({ error: 'Failed to retrieve event details.' });
@@ -122,6 +140,7 @@ router.post('/', authenticateToken, authorizeRoles('organizer', 'admin'), (req, 
   }
 
   const capacityText = String(capacity);
+
   if (!/^\d+$/.test(capacityText) || Number(capacityText) < 1) {
     return res.status(400).json({ error: 'Capacity must be a positive integer greater than or equal to 1.' });
   }
@@ -144,10 +163,12 @@ router.post('/', authenticateToken, authorizeRoles('organizer', 'admin'), (req, 
     );
 
     const newEvent = db.prepare('SELECT * FROM events WHERE id = ?').get(result.lastInsertRowid);
+
     return res.status(201).json({
       message: 'Event created successfully.',
       event: newEvent
     });
+
   } catch (err) {
     console.error('Create event error:', err);
     return res.status(500).json({ error: 'Failed to create event.' });
@@ -161,6 +182,7 @@ router.put('/:id', authenticateToken, authorizeRoles('organizer', 'admin'), (req
 
   try {
     const existing = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+
     if (!existing) {
       return res.status(404).json({ error: 'Event not found.' });
     }
@@ -203,10 +225,12 @@ router.put('/:id', authenticateToken, authorizeRoles('organizer', 'admin'), (req
     );
 
     const updated = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+
     return res.status(200).json({
       message: 'Event updated successfully.',
       event: updated
     });
+
   } catch (err) {
     console.error('Update event error:', err);
     return res.status(500).json({ error: 'Failed to update event.' });
@@ -219,6 +243,7 @@ router.delete('/:id', authenticateToken, authorizeRoles('organizer', 'admin'), (
 
   try {
     const existing = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+
     if (!existing) {
       return res.status(404).json({ error: 'Event not found.' });
     }
@@ -237,6 +262,7 @@ router.delete('/:id', authenticateToken, authorizeRoles('organizer', 'admin'), (
       db.prepare("UPDATE events SET status = 'cancelled' WHERE id = ?").run(eventId);
       return res.status(200).json({ message: 'Event marked as cancelled successfully.' });
     }
+
   } catch (err) {
     console.error('Delete event error:', err);
     return res.status(500).json({ error: 'Failed to cancel event.' });
@@ -250,6 +276,7 @@ router.post('/:id/register', authenticateToken, (req, res) => {
 
   try {
     const event = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+
     if (!event) {
       return res.status(404).json({ error: 'Event not found.' });
     }
@@ -270,6 +297,7 @@ router.post('/:id/register', authenticateToken, (req, res) => {
       }
 
       const currentCount = getRegistrationCount(eventId);
+
       if (currentCount >= event.capacity) {
         const error = new Error('Event is at full capacity. No more seats available.');
         error.status = 400;
@@ -296,6 +324,7 @@ router.post('/:id/register', authenticateToken, (req, res) => {
     });
 
     const { spotsLeft } = registrationTransaction.immediate();
+
     return res.status(201).json({
       message: 'Registration successful! Confirmation has been recorded.',
       registration: {
@@ -305,6 +334,7 @@ router.post('/:id/register', authenticateToken, (req, res) => {
         spots_left: spotsLeft
       }
     });
+
   } catch (err) {
     if (err.status) {
       return res.status(err.status).json({ error: err.message });
@@ -338,6 +368,7 @@ router.delete('/:id/register', authenticateToken, (req, res) => {
     return res.status(200).json({
       message: 'Registration successfully cancelled. Your spot has been released.'
     });
+
   } catch (err) {
     console.error('Cancel registration error:', err);
     return res.status(500).json({ error: 'Failed to cancel registration.' });
@@ -350,6 +381,7 @@ router.get('/:id/participants', authenticateToken, authorizeRoles('organizer', '
 
   try {
     const event = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+
     if (!event) {
       return res.status(404).json({ error: 'Event not found.' });
     }
@@ -378,6 +410,7 @@ router.get('/:id/participants', authenticateToken, authorizeRoles('organizer', '
       cancelled_count: cancelled.length,
       participants
     });
+
   } catch (err) {
     console.error('Fetch participants error:', err);
     return res.status(500).json({ error: 'Failed to retrieve participants.' });
@@ -395,6 +428,7 @@ router.post('/:id/updates', authenticateToken, authorizeRoles('organizer', 'admi
 
   try {
     const event = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+
     if (!event) {
       return res.status(404).json({ error: 'Event not found.' });
     }
@@ -414,6 +448,7 @@ router.post('/:id/updates', authenticateToken, authorizeRoles('organizer', 'admi
       message: 'Event update sent to all registered participants.',
       update
     });
+
   } catch (err) {
     console.error('Send update error:', err);
     return res.status(500).json({ error: 'Failed to post event update.' });

@@ -19,7 +19,7 @@
       <button class="nav-btn active" id="nav-events-btn" onclick="app.navigate('home')">
         <i class="fa-regular fa-calendar-days"></i> Explore Events
       </button>
-      
+
       <!-- Logged in Attendee Links -->
       <button class="nav-btn" id="nav-my-events-btn" style="display: none;" onclick="app.navigate('my-events')">
         <i class="fa-solid fa-ticket"></i> My Registrations
@@ -51,15 +51,16 @@
 
   <!-- Main Container -->
   <main class="container">
-    
+
     <!-- Home / Explore View -->
     <section id="view-home">
       <div class="hero">
         <h1>Discover, Register & Host Unforgettable Events</h1>
         <p>Built for students, organizers, and administrators with real-time capacity management, duplicate-prevention, and instant updates.</p>
-        
+
         <div class="filters-bar">
           <input type="text" id="search-input" class="search-input" placeholder="Search events by title, topic, or venue..." oninput="app.debouncedSearch()">
+
           <select id="category-filter" class="filter-select" onchange="app.filterEvents()">
             <option value="All">All Categories</option>
             <option value="Technology">Technology</option>
@@ -68,7 +69,19 @@
             <option value="Seminar">Seminar</option>
             <option value="Cultural">Cultural</option>
           </select>
-          <button class="btn-secondary" onclick="app.fetchEvents()"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+
+          <!-- Date Filter -->
+          <input
+            type="date"
+            id="date-filter"
+            class="filter-select"
+            aria-label="Filter events by date"
+            onchange="app.filterEvents()"
+          >
+
+          <button class="btn-secondary" onclick="app.fetchEvents()">
+            <i class="fa-solid fa-rotate-right"></i> Refresh
+          </button>
         </div>
       </div>
 
@@ -82,7 +95,7 @@
       <div style="margin-top: 2rem;">
         <h2>My Event Registrations</h2>
         <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Track and manage your upcoming registered sessions or cancel anytime.</p>
-        
+
         <!-- Live Notifications Banner -->
         <div id="updates-banner" style="margin-bottom: 2rem;"></div>
 
