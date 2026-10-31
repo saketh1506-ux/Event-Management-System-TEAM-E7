@@ -147,4 +147,9 @@ function initDb() {
 
 initDb();
 
+Object.defineProperty(db, '_emsConfiguredDbPath', {
+  value: dbPath,
+  enumerable: false
+});
+
 module.exports = db;
