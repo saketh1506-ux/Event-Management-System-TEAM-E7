@@ -1,4 +1,5 @@
 const express = require('express');
+const eventController = require('../controllers/eventController');
 const router = express.Router();
 const db = require('../db');
 const { authenticateToken, optionalAuthenticate, authorizeRoles } = require('../middleware/auth');
