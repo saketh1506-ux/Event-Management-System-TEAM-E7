@@ -9,6 +9,17 @@ class App {
     this.init();
   }
 
+
+  escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   init() {
     this.updateAuthUI();
     this.verifySession();
@@ -397,6 +408,7 @@ class App {
           </div>
           <div class="card-actions" style="flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem;">
             <button class="btn-secondary" onclick="app.viewParticipants(${evt.id})"><i class="fa-solid fa-clipboard-user"></i> Participants</button>
+            <button class="btn-secondary" onclick="app.viewRegistrationReport(${evt.id})"><i class="fa-solid fa-file-lines"></i> Report</button>
             <button class="btn-secondary" onclick="app.openBroadcastModal(${evt.id})"><i class="fa-solid fa-bullhorn"></i> Update</button>
             ${evt.status === 'active' ? `
               <button class="btn-danger" onclick="app.cancelEvent(${evt.id})">Cancel</button>
@@ -456,6 +468,113 @@ class App {
       this.toast(data.message, 'info');
       this.fetchOrganizerEvents();
       this.fetchEvents();
+    } catch (err) {
+      this.toast(err.message, 'error');
+    }
+  }
+
+
+  // --- Registration Reports (FR-10) ---
+  async viewRegistrationReport(eventId) {
+    try {
+      const res = await fetch(`${API_BASE}/events/${eventId}/report`, {
+        headers: { 'Authorization': `Bearer ${this.token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate report');
+
+      document.getElementById('modal-event-title').innerText = `Registration Report: ${data.event.title}`;
+      const body = document.getElementById('modal-event-body');
+
+      body.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div>
+            <span class="event-badge">${this.escapeHtml(data.event.category)}</span>
+            <span style="color: var(--text-muted); font-size: 0.875rem; margin-left: 0.5rem;">
+              <i class="fa-regular fa-calendar"></i> ${this.escapeHtml(data.event.date)} at ${this.escapeHtml(data.event.time)} | ${this.escapeHtml(data.event.location)}
+            </span>
+          </div>
+          <button class="btn-primary" onclick="app.downloadReportCSV(${Number(eventId)})" style="padding: 0.4rem 0.8rem; font-size: 0.875rem;">
+            <i class="fa-solid fa-download"></i> Download CSV
+          </button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem;">
+          <div class="stat-card" style="padding: 0.875rem; text-align: center;">
+            <div style="color: var(--text-muted); font-size: 0.8rem;">Capacity</div>
+            <div style="font-size: 1.35rem; font-weight: 700;">${data.summary.capacity}</div>
+          </div>
+          <div class="stat-card" style="padding: 0.875rem; text-align: center;">
+            <div style="color: var(--text-muted); font-size: 0.8rem;">Confirmed</div>
+            <div style="font-size: 1.35rem; font-weight: 700; color: var(--success);">${data.summary.confirmed_count}</div>
+          </div>
+          <div class="stat-card" style="padding: 0.875rem; text-align: center;">
+            <div style="color: var(--text-muted); font-size: 0.8rem;">Cancelled</div>
+            <div style="font-size: 1.35rem; font-weight: 700; color: var(--text-muted);">${data.summary.cancelled_count}</div>
+          </div>
+          <div class="stat-card" style="padding: 0.875rem; text-align: center;">
+            <div style="color: var(--text-muted); font-size: 0.8rem;">Available</div>
+            <div style="font-size: 1.35rem; font-weight: 700; color: var(--accent);">${data.summary.available_spots}</div>
+          </div>
+          <div class="stat-card" style="padding: 0.875rem; text-align: center;">
+            <div style="color: var(--text-muted); font-size: 0.8rem;">Occupancy</div>
+            <div style="font-size: 1.35rem; font-weight: 700; color: var(--primary);">${data.summary.occupancy_rate}%</div>
+          </div>
+        </div>
+
+        <h4 style="margin-bottom: 0.5rem;">Attendee Roster (${data.attendees.length})</h4>
+        ${data.attendees.length === 0 ? '<p style="color: var(--text-muted); margin-top: 0.5rem;">No registrations recorded for this event.</p>' : `
+          <div class="table-responsive">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th>Reg ID</th>
+                  <th>Attendee Name</th>
+                  <th>Email</th>
+                  <th>Registered At</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.attendees.map(a => `
+                  <tr>
+                    <td>#${a.registration_id}</td>
+                    <td><strong>${this.escapeHtml(a.name)}</strong></td>
+                    <td>${this.escapeHtml(a.email)}</td>
+                    <td>${new Date(a.registered_at).toLocaleString()}</td>
+                    <td><span style="color: ${a.status === 'confirmed' ? 'var(--success)' : 'var(--text-muted)'}; font-weight: 600;">${this.escapeHtml(a.status.toUpperCase())}</span></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `}
+      `;
+      this.showModal('details-modal');
+    } catch (err) {
+      this.toast(err.message, 'error');
+    }
+  }
+
+  async downloadReportCSV(eventId) {
+    try {
+      const res = await fetch(`${API_BASE}/events/${eventId}/report?format=csv`, {
+        headers: { 'Authorization': `Bearer ${this.token}` }
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to download report');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `report-event-${eventId}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      this.toast('Report CSV downloaded successfully!', 'success');
     } catch (err) {
       this.toast(err.message, 'error');
     }

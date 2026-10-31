@@ -420,4 +420,133 @@ router.post('/:id/updates', authenticateToken, authorizeRoles('organizer', 'admi
   }
 });
 
+// Helper to escape CSV field values safely against formula injection and delimiters (FR-10)
+function escapeCsvValue(val) {
+  if (val === null || val === undefined) return '""';
+  let str = String(val);
+  // Protect against spreadsheet formula injection (=, +, -, @, tab, CR, pipe, semicolon, or formula with leading whitespace)
+  if (/^\s*[=+\-@|;\t\r\n]/.test(str)) {
+    str = "'" + str;
+  }
+  // Escape inner double quotes
+  str = str.replace(/"/g, '""');
+  return `"${str}"`;
+}
+
+// GET /api/events/:id/report (FR-10, UC-20, TC-15) - Generate registration report
+router.get('/:id/report', authenticateToken, authorizeRoles('organizer', 'admin'), (req, res) => {
+  const eventId = req.params.id;
+  const format = (req.query.format || '').toLowerCase();
+
+  try {
+    const event = db.prepare(`
+      SELECT e.*, u.name as organizer_name, u.email as organizer_email
+      FROM events e
+      JOIN users u ON e.organizer_id = u.id
+      WHERE e.id = ?
+    `).get(eventId);
+
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found.' });
+    }
+
+    if (req.user.role !== 'admin' && event.organizer_id !== req.user.id) {
+      return res.status(403).json({ error: 'You are not authorized to generate reports for this event.' });
+    }
+
+    const participants = db.prepare(`
+      SELECT r.id as registration_id, r.status, r.registered_at,
+             u.id as user_id, u.name, u.email
+      FROM registrations r
+      JOIN users u ON r.user_id = u.id
+      WHERE r.event_id = ?
+      ORDER BY r.registered_at ASC
+    `).all(eventId);
+
+    const confirmed = participants.filter(p => p.status === 'confirmed');
+    const cancelled = participants.filter(p => p.status === 'cancelled');
+    const confirmedCount = confirmed.length;
+    const cancelledCount = cancelled.length;
+    const capacity = Number(event.capacity);
+    const availableSpots = Math.max(0, capacity - confirmedCount);
+    const occupancyPercentage = capacity > 0
+      ? Number(((confirmedCount / capacity) * 100).toFixed(2))
+      : 0;
+
+    const reportData = {
+      event: {
+        id: event.id,
+        title: event.title,
+        description: event.description,
+        category: event.category,
+        location: event.location,
+        date: event.date,
+        time: event.time,
+        status: event.status,
+        organizer_name: event.organizer_name,
+        organizer_email: event.organizer_email
+      },
+      summary: {
+        capacity,
+        confirmed_count: confirmedCount,
+        cancelled_count: cancelledCount,
+        available_spots: availableSpots,
+        occupancy_rate: occupancyPercentage
+      },
+      generated_at: new Date().toISOString(),
+      attendees: participants.map(p => ({
+        registration_id: p.registration_id,
+        user_id: p.user_id,
+        name: p.name,
+        email: p.email,
+        status: p.status,
+        registered_at: p.registered_at
+      }))
+    };
+
+    if (format === 'csv') {
+      const csvLines = [];
+      csvLines.push(`${escapeCsvValue('Event Registration Report')},${escapeCsvValue(event.title)}`);
+      csvLines.push(`${escapeCsvValue('Event Date')},${escapeCsvValue(event.date + ' ' + event.time)}`);
+      csvLines.push(`${escapeCsvValue('Location')},${escapeCsvValue(event.location)}`);
+      csvLines.push(`${escapeCsvValue('Capacity')},${escapeCsvValue(capacity)}`);
+      csvLines.push(`${escapeCsvValue('Confirmed Registrations')},${escapeCsvValue(confirmedCount)}`);
+      csvLines.push(`${escapeCsvValue('Cancelled Registrations')},${escapeCsvValue(cancelledCount)}`);
+      csvLines.push(`${escapeCsvValue('Available Spots')},${escapeCsvValue(availableSpots)}`);
+      csvLines.push(`${escapeCsvValue('Occupancy Rate (%)')},${escapeCsvValue(occupancyPercentage + '%')}`);
+      csvLines.push(`${escapeCsvValue('Report Generated At')},${escapeCsvValue(reportData.generated_at)}`);
+      csvLines.push('');
+      csvLines.push([
+        escapeCsvValue('Registration ID'),
+        escapeCsvValue('Attendee Name'),
+        escapeCsvValue('Attendee Email'),
+        escapeCsvValue('Status'),
+        escapeCsvValue('Registered At')
+      ].join(','));
+
+      for (const att of reportData.attendees) {
+        csvLines.push([
+          escapeCsvValue(att.registration_id),
+          escapeCsvValue(att.name),
+          escapeCsvValue(att.email),
+          escapeCsvValue(att.status),
+          escapeCsvValue(att.registered_at)
+        ].join(','));
+      }
+
+      const csvContent = csvLines.join('\r\n');
+      const sanitizedFilename = `report-event-${eventId}.csv`;
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${sanitizedFilename}"`);
+      return res.status(200).send(csvContent);
+    }
+
+    return res.status(200).json(reportData);
+  } catch (err) {
+    console.error('Generate report error:', err);
+    return res.status(500).json({ error: 'Failed to generate registration report.' });
+  }
+});
+
 module.exports = router;
