@@ -203,7 +203,7 @@ Event-Management-System-TEAM-E7/
 
 | Team Member | GitHub Username | PRN | Sprint 1 Pts | Sprint 2 Pts | Total Pts | Assigned Focus Area |
 |---|---|---|---|---|---|---|
-| **Saketh Narayanam** | @saketh1506-ux | PES1UG24CS292 | 13 | 6 | 19 | User Auth, Password Security, Session Handling, Reports |
+| **Saketh Narayanam** | @saketh1506-ux | PES1UG24CS292 | 13 | 6 | 19 | User Auth, Password Security, Session Handling, Reports, SEC-03 – Inbound Payload Validation & Sanitization |
 | **Neeraj R Gowda** | @neerajrgowda8558-arch | PES1UG24CS295 | 16 | 8 | 24 | Event Discovery, Search/Filter, Organizer CRUD, Admin Module |
 | **Likhith Reddy M** | @52likhith | PES1UG24CS282 | 14 | 7 | 21 | Registration Engine, Capacity Validation, E2E Test Suite |
-| **N. Adil Ahmed** | @adilahmed55 | PES1UG24CS285 | 11 | 8 | 19 | Modular Architecture, Security Guards, Responsive UI, CI/CD |
+| **N. Adil Ahmed** | @adilahmed55 | PES1UG24CS285 | 11 | 8 | 19 | Modular Architecture, Responsive UI, CI/CD |
