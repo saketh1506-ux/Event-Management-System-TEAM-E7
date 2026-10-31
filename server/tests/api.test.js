@@ -791,3 +791,262 @@ test('SEC-05-04: Failed validation and authorization requests leave database unc
   assert.strictEqual(db.prepare('SELECT COUNT(*) AS count FROM users').get().count, before.users);
   assert.strictEqual(db.prepare('SELECT COUNT(*) AS count FROM events').get().count, before.events);
 });
+
+// --- FR-10: Organizer Registration Reports Generation ---
+
+test('FR-10-01: Event owner successfully retrieves a registration report', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+  const orgToken = orgLogin.body.token;
+
+  // Create an event
+  const eventRes = await request('POST', '/api/events', {
+    title: `Report Generation Test ${Date.now()}`,
+    description: 'Testing registration report generation',
+    category: 'Technology',
+    location: 'Conference Room 1',
+    date: '2026-12-19',
+    time: '10:00 AM',
+    capacity: 20
+  }, orgToken);
+  assert.strictEqual(eventRes.status, 201);
+  const eventId = eventRes.body.event.id;
+
+  // Register attendee
+  const userLogin = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  assert.strictEqual(userLogin.status, 200);
+  const regRes = await request('POST', `/api/events/${eventId}/register`, {}, userLogin.body.token);
+  assert.strictEqual(regRes.status, 201);
+
+  // Retrieve report as owner
+  const reportRes = await request('GET', `/api/events/${eventId}/report`, null, orgToken);
+  assert.strictEqual(reportRes.status, 200);
+  assert.strictEqual(reportRes.body.event.id, eventId);
+  assert.strictEqual(reportRes.body.summary.capacity, 20);
+  assert.strictEqual(reportRes.body.summary.confirmed_count, 1);
+  assert.strictEqual(reportRes.body.summary.cancelled_count, 0);
+  assert.strictEqual(reportRes.body.summary.available_spots, 19);
+  assert.strictEqual(reportRes.body.summary.occupancy_rate, 5.0); // 1 / 20 * 100 = 5%
+  assert.strictEqual(reportRes.body.attendees.length, 1);
+  assert.strictEqual(reportRes.body.attendees[0].email, 'likhith@ems.com');
+  assert.strictEqual(reportRes.body.attendees[0].status, 'confirmed');
+  assert.ok(reportRes.body.attendees[0].registered_at);
+});
+
+test('FR-10-02: Non-owner organizer receives 403 when attempting to access report', async () => {
+  // Organizer 1 creates event
+  const org1Login = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  const org1Token = org1Login.body.token;
+
+  const eventRes = await request('POST', '/api/events', {
+    title: `Org 1 Report Event ${Date.now()}`,
+    description: 'Owned by organizer 1',
+    category: 'Workshop',
+    location: 'Lab A',
+    date: '2026-12-20',
+    time: '11:00 AM',
+    capacity: 10
+  }, org1Token);
+  assert.strictEqual(eventRes.status, 201);
+  const eventId = eventRes.body.event.id;
+
+  // Organizer 2 attempts to fetch report
+  const org2Login = await request('POST', '/api/auth/login', {
+    email: 'neeraj@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(org2Login.status, 200);
+  const org2Token = org2Login.body.token;
+
+  const reportRes = await request('GET', `/api/events/${eventId}/report`, null, org2Token);
+  assert.strictEqual(reportRes.status, 403);
+  assert.match(reportRes.body.error, /not authorized/i);
+});
+
+test('FR-10-03: Unauthenticated user receives 401 when attempting to access report', async () => {
+  const reportRes = await request('GET', '/api/events/1/report');
+  assert.strictEqual(reportRes.status, 401);
+  assert.match(reportRes.body.error, /token required|log in/i);
+});
+
+test('FR-10-04: Normal attendee receives 403 when attempting to access report', async () => {
+  const userLogin = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  assert.strictEqual(userLogin.status, 200);
+
+  const reportRes = await request('GET', '/api/events/1/report', null, userLogin.body.token);
+  assert.strictEqual(reportRes.status, 403);
+  assert.match(reportRes.body.error, /forbidden|access denied/i);
+});
+
+test('FR-10-05: Non-existent event returns 404', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+
+  const reportRes = await request('GET', '/api/events/999999/report', null, orgLogin.body.token);
+  assert.strictEqual(reportRes.status, 404);
+  assert.match(reportRes.body.error, /not found/i);
+});
+
+test('FR-10-06: Occupancy is correctly calculated for empty and full events', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  const orgToken = orgLogin.body.token;
+
+  // 1. Empty event (capacity: 2) -> 0% occupancy
+  const emptyRes = await request('POST', '/api/events', {
+    title: `Empty Event Occupancy ${Date.now()}`,
+    description: 'Zero registered attendees',
+    category: 'Seminar',
+    location: 'Room 101',
+    date: '2026-12-21',
+    time: '02:00 PM',
+    capacity: 2
+  }, orgToken);
+  assert.strictEqual(emptyRes.status, 201);
+  const emptyId = emptyRes.body.event.id;
+
+  const emptyReport = await request('GET', `/api/events/${emptyId}/report`, null, orgToken);
+  assert.strictEqual(emptyReport.status, 200);
+  assert.strictEqual(emptyReport.body.summary.confirmed_count, 0);
+  assert.strictEqual(emptyReport.body.summary.available_spots, 2);
+  assert.strictEqual(emptyReport.body.summary.occupancy_rate, 0);
+
+  // 2. Full event (capacity: 1) -> 100% occupancy
+  const fullRes = await request('POST', '/api/events', {
+    title: `Full Event Occupancy ${Date.now()}`,
+    description: 'Full capacity event',
+    category: 'Workshop',
+    location: 'Room 102',
+    date: '2026-12-22',
+    time: '03:00 PM',
+    capacity: 1
+  }, orgToken);
+  assert.strictEqual(fullRes.status, 201);
+  const fullId = fullRes.body.event.id;
+
+  const userLogin = await request('POST', '/api/auth/login', {
+    email: 'adil@ems.com',
+    password: 'User@123'
+  });
+  await request('POST', `/api/events/${fullId}/register`, {}, userLogin.body.token);
+
+  const fullReport = await request('GET', `/api/events/${fullId}/report`, null, orgToken);
+  assert.strictEqual(fullReport.status, 200);
+  assert.strictEqual(fullReport.body.summary.confirmed_count, 1);
+  assert.strictEqual(fullReport.body.summary.available_spots, 0);
+  assert.strictEqual(fullReport.body.summary.occupancy_rate, 100.0);
+});
+
+test('FR-10-07: Cancelled registrations do not contribute to occupancy count or rate', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  const orgToken = orgLogin.body.token;
+
+  // Create event with capacity 2
+  const eventRes = await request('POST', '/api/events', {
+    title: `Cancellation Occupancy Test ${Date.now()}`,
+    description: 'Testing cancelled impact on report',
+    category: 'Technology',
+    location: 'Hall B',
+    date: '2026-12-23',
+    time: '04:00 PM',
+    capacity: 2
+  }, orgToken);
+  const eventId = eventRes.body.event.id;
+
+  const userLogin = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  const userToken = userLogin.body.token;
+
+  // User registers then cancels
+  await request('POST', `/api/events/${eventId}/register`, {}, userToken);
+  await request('DELETE', `/api/events/${eventId}/register`, {}, userToken);
+
+  const report = await request('GET', `/api/events/${eventId}/report`, null, orgToken);
+  assert.strictEqual(report.status, 200);
+  assert.strictEqual(report.body.summary.confirmed_count, 0);
+  assert.strictEqual(report.body.summary.cancelled_count, 1);
+  assert.strictEqual(report.body.summary.available_spots, 2);
+  assert.strictEqual(report.body.summary.occupancy_rate, 0);
+
+  // The roster should still list the cancelled registration with status 'cancelled'
+  assert.strictEqual(report.body.attendees.length, 1);
+  assert.strictEqual(report.body.attendees[0].status, 'cancelled');
+});
+
+test('FR-10-08: CSV export has correct headers, rows, content type, attachment disposition, and formula escaping', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  const orgToken = orgLogin.body.token;
+
+  const eventRes = await request('POST', '/api/events', {
+    title: `CSV Export Test ${Date.now()}`,
+    description: 'Testing CSV download',
+    category: 'Workshop',
+    location: 'Lab 3',
+    date: '2026-12-24',
+    time: '09:00 AM',
+    capacity: 10
+  }, orgToken);
+  const eventId = eventRes.body.event.id;
+
+  // Register user with normal name
+  const userLogin = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  await request('POST', `/api/events/${eventId}/register`, {}, userLogin.body.token);
+
+  // Create temporary user with formula prefix to test formula injection protection
+  const formulaEmail = `formula_${Date.now()}@example.com`;
+  const regFormula = await request('POST', '/api/auth/register', {
+    name: '=1+1; CMD|',
+    email: formulaEmail,
+    password: 'Password123'
+  });
+  assert.strictEqual(regFormula.status, 201);
+  await request('POST', `/api/events/${eventId}/register`, {}, regFormula.body.token);
+
+  // Request CSV report
+  const csvRes = await request('GET', `/api/events/${eventId}/report?format=csv`, null, orgToken);
+  assert.strictEqual(csvRes.status, 200);
+
+  // The body in helper will be parsed or raw; let's verify via raw string
+  const rawCsv = typeof csvRes.body === 'string' ? csvRes.body : (csvRes.raw || JSON.stringify(csvRes.body));
+  assert.ok(rawCsv.includes('Event Registration Report'));
+  assert.ok(rawCsv.includes('Registration ID'));
+  assert.ok(rawCsv.includes('Attendee Name'));
+  assert.ok(rawCsv.includes('Attendee Email'));
+  assert.ok(rawCsv.includes('Status'));
+  assert.ok(rawCsv.includes('Registered At'));
+  assert.ok(rawCsv.includes('likhith@ems.com'));
+  assert.ok(rawCsv.includes(formulaEmail));
+  // Formula injection check: '=1+1' must be prepended with single quote: "'=1+1"
+  assert.ok(rawCsv.includes("'=1+1; CMD|"), 'Formula injection characters must be sanitized');
+
+  // Clean up formula user
+  db.prepare('DELETE FROM users WHERE email = ?').run(formulaEmail);
+});
