@@ -407,6 +407,7 @@ class App {
             <span>Status: <strong>${evt.status.toUpperCase()}</strong></span>
           </div>
           <div class="card-actions" style="flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem;">
+            <button class="btn-secondary" onclick="app.editEvent(${evt.id})"><i class="fa-solid fa-pen-to-square"></i> Edit</button>
             <button class="btn-secondary" onclick="app.viewParticipants(${evt.id})"><i class="fa-solid fa-clipboard-user"></i> Participants</button>
             <button class="btn-secondary" onclick="app.viewRegistrationReport(${evt.id})"><i class="fa-solid fa-file-lines"></i> Report</button>
             <button class="btn-secondary" onclick="app.openBroadcastModal(${evt.id})"><i class="fa-solid fa-bullhorn"></i> Update</button>
@@ -418,6 +419,85 @@ class App {
       `).join('');
     } catch (err) {
       this.toast('Failed to fetch organized events.', 'error');
+    }
+  }
+    async editEvent(eventId) {
+    try {
+      const res = await fetch(`${API_BASE}/events/${eventId}`, {
+        headers: {
+          'Authorization': `Bearer ${this.token}`
+        }
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to load event.');
+      }
+
+      const evt = data.event;
+
+      document.getElementById('edit-event-id').value = evt.id;
+      document.getElementById('edit-event-title').value = evt.title || '';
+      document.getElementById('edit-event-category').value = evt.category || 'Technology';
+      document.getElementById('edit-event-desc').value = evt.description || '';
+      document.getElementById('edit-event-location').value = evt.location || '';
+      document.getElementById('edit-event-date').value = String(evt.date || '').slice(0, 10);
+      document.getElementById('edit-event-time').value = evt.time || '';
+      document.getElementById('edit-event-capacity').value = evt.capacity || 1;
+
+      this.showModal('edit-event-modal');
+    } catch (err) {
+      this.toast(err.message, 'error');
+    }
+  }
+
+  async handleEditEvent(e) {
+    e.preventDefault();
+
+    const eventId = document.getElementById('edit-event-id').value;
+    const capacity = Number(document.getElementById('edit-event-capacity').value);
+
+    if (!Number.isSafeInteger(capacity) || capacity < 1 || capacity > 10000) {
+      this.toast('Capacity must be between 1 and 10000.', 'error');
+      return;
+    }
+
+    const eventData = {
+      title: document.getElementById('edit-event-title').value.trim(),
+      category: document.getElementById('edit-event-category').value,
+      description: document.getElementById('edit-event-desc').value.trim(),
+      location: document.getElementById('edit-event-location').value.trim(),
+      date: document.getElementById('edit-event-date').value,
+      time: document.getElementById('edit-event-time').value.trim(),
+      capacity
+    };
+
+    try {
+      const res = await fetch(`${API_BASE}/events/${eventId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.token}`
+        },
+        body: JSON.stringify(eventData)
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update event.');
+      }
+
+      this.hideModal('edit-event-modal');
+      document.getElementById('edit-event-form').reset();
+
+      this.toast('Event updated successfully!', 'success');
+
+      await this.fetchOrganizerEvents();
+      await this.fetchEvents();
+    } catch (err) {
+      this.toast(err.message, 'error');
     }
   }
 
