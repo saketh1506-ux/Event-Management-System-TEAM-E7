@@ -5,6 +5,7 @@ const router = express.Router();
 const db = require('../db');
 
 const { authenticateToken, optionalAuthenticate, authorizeRoles } = require('../middleware/auth');
+const eventController = require('../controllers/eventController');
 
 // Helper to get registration count for an event
 function getRegistrationCount(eventId) {
@@ -16,67 +17,10 @@ function getRegistrationCount(eventId) {
   return row ? row.count : 0;
 }
 
-// GET /api/events (FR-02, UC-01, UC-02) - List, search, filter events
-router.get('/', (req, res) => {
-  try {
-    const { search, category, status, date } = req.query;
+// GET /api/events - List, search, and filter events
+router.get('/', eventController.getAllEvents);
 
-    let query = `
-      SELECT e.*, u.name as organizer_name, u.email as organizer_email,
-        (SELECT COUNT(*) FROM registrations r WHERE r.event_id = e.id AND r.status = 'confirmed') as registered_count
-      FROM events e
-      JOIN users u ON e.organizer_id = u.id
-      WHERE 1=1
-    `;
-    const params = [];
-
-    // Filter by status (default active unless requested)
-    if (status) {
-      query += ` AND e.status = ?`;
-      params.push(status);
-    } else {
-      query += ` AND e.status != 'deleted'`;
-    }
-
-    // Filter by category
-    if (category && category !== 'All') {
-      query += ` AND e.category = ?`;
-      params.push(category);
-    }
-
-    // Filter by exact event date
-    if (date) {
-      query += ` AND e.date = ?`;
-      params.push(date);
-    }
-
-    // Search by title, description, or location
-    if (search && search.trim() !== '') {
-      query += ` AND (e.title LIKE ? OR e.description LIKE ? OR e.location LIKE ?)`;
-      const term = `%${search.trim()}%`;
-      params.push(term, term, term);
-    }
-
-    query += ` ORDER BY e.date ASC, e.time ASC`;
-
-    const events = db.prepare(query).all(...params);
-
-    // Calculate available spots and is_full
-    const formattedEvents = events.map(evt => ({
-      ...evt,
-      spots_left: Math.max(0, evt.capacity - evt.registered_count),
-      is_full: evt.registered_count >= evt.capacity
-    }));
-
-    return res.status(200).json({ events: formattedEvents });
-
-  } catch (err) {
-    console.error('Fetch events error:', err);
-    return res.status(500).json({ error: 'Failed to retrieve events.' });
-  }
-});
-
-// GET /api/events/:id (FR-03, UC-03) - View event details
+// GET /api/events/:id - View event details
 router.get('/:id', optionalAuthenticate, (req, res) => {
   try {
     const eventId = req.params.id;
@@ -93,7 +37,6 @@ router.get('/:id', optionalAuthenticate, (req, res) => {
       return res.status(404).json({ error: 'Event not found.' });
     }
 
-    // Only confirmed attendees, the event organizer, or an admin can access restricted event updates (FR-09)
     let updates = [];
 
     if (req.user) {
@@ -131,7 +74,7 @@ router.get('/:id', optionalAuthenticate, (req, res) => {
   }
 });
 
-// POST /api/events (FR-07, OR-01, OR-04, UC-11) - Create event (Organizer / Admin)
+// POST /api/events - Create event
 router.post('/', authenticateToken, authorizeRoles('organizer', 'admin'), (req, res) => {
   const { title, description, category, location, date, time, capacity } = req.body;
 
@@ -175,7 +118,7 @@ router.post('/', authenticateToken, authorizeRoles('organizer', 'admin'), (req, 
   }
 });
 
-// PUT /api/events/:id (FR-07, OR-02, UC-12) - Edit event (Organizer / Admin)
+// PUT /api/events/:id - Edit event
 router.put('/:id', authenticateToken, authorizeRoles('organizer', 'admin'), (req, res) => {
   const eventId = req.params.id;
   const { title, description, category, location, date, time, capacity, status } = req.body;
@@ -187,7 +130,6 @@ router.put('/:id', authenticateToken, authorizeRoles('organizer', 'admin'), (req
       return res.status(404).json({ error: 'Event not found.' });
     }
 
-    // Only creator organizer or admin can edit
     if (req.user.role !== 'admin' && existing.organizer_id !== req.user.id) {
       return res.status(403).json({ error: 'You are not authorized to edit this event.' });
     }
@@ -235,9 +177,8 @@ router.put('/:id', authenticateToken, authorizeRoles('organizer', 'admin'), (req
     console.error('Update event error:', err);
     return res.status(500).json({ error: 'Failed to update event.' });
   }
-});
-
-// DELETE /api/events/:id (FR-07, OR-03, AR-05, UC-13, UC-19) - Cancel or Remove event
+});nxt
+// DELETE /api/events/:id - Cancel or remove event
 router.delete('/:id', authenticateToken, authorizeRoles('organizer', 'admin'), (req, res) => {
   const eventId = req.params.id;
 
@@ -252,7 +193,6 @@ router.delete('/:id', authenticateToken, authorizeRoles('organizer', 'admin'), (
       return res.status(403).json({ error: 'You are not authorized to cancel this event.' });
     }
 
-    // Organizers mark status as cancelled; Admins can delete permanently or mark cancelled
     const hardDelete = req.query.hard === 'true' && req.user.role === 'admin';
 
     if (hardDelete) {
@@ -269,7 +209,7 @@ router.delete('/:id', authenticateToken, authorizeRoles('organizer', 'admin'), (
   }
 });
 
-// POST /api/events/:id/register (FR-04, FR-05, UR-06, TC-04, TC-05, TC-06) - Register for event
+// POST /api/events/:id/register - Register for event
 router.post('/:id/register', authenticateToken, (req, res) => {
   const eventId = req.params.id;
   const userId = req.user.id;
@@ -345,14 +285,15 @@ router.post('/:id/register', authenticateToken, (req, res) => {
   }
 });
 
-// DELETE /api/events/:id/register (FR-05, UR-07, TC-07) - Cancel registration
+// DELETE /api/events/:id/register - Cancel registration
 router.delete('/:id/register', authenticateToken, (req, res) => {
   const eventId = req.params.id;
   const userId = req.user.id;
 
   try {
     const existing = db.prepare(`
-      SELECT * FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'confirmed'
+      SELECT * FROM registrations
+      WHERE event_id = ? AND user_id = ? AND status = 'confirmed'
     `).get(eventId, userId);
 
     if (!existing) {
@@ -374,8 +315,7 @@ router.delete('/:id/register', authenticateToken, (req, res) => {
     return res.status(500).json({ error: 'Failed to cancel registration.' });
   }
 });
-
-// GET /api/events/:id/participants (FR-08, OR-05, OR-06, UC-15) - View participants
+// GET /api/events/:id/participants - View participants
 router.get('/:id/participants', authenticateToken, authorizeRoles('organizer', 'admin'), (req, res) => {
   const eventId = req.params.id;
 
@@ -417,12 +357,13 @@ router.get('/:id/participants', authenticateToken, authorizeRoles('organizer', '
   }
 });
 
-// POST /api/events/:id/updates (FR-09, OR-07, UC-16) - Send an event update
+// POST /api/events/:id/updates - Send an event update
 router.post('/:id/updates', authenticateToken, authorizeRoles('organizer', 'admin'), (req, res) => {
   const eventId = req.params.id;
   const { title, message } = req.body;
 
-  if (!title || typeof title !== 'string' || !title.trim() || !message || typeof message !== 'string' || !message.trim()) {
+  if (!title || typeof title !== 'string' || !title.trim() ||
+      !message || typeof message !== 'string' || !message.trim()) {
     return res.status(400).json({ error: 'Update title and message are required and cannot be empty.' });
   }
 
@@ -454,21 +395,22 @@ router.post('/:id/updates', authenticateToken, authorizeRoles('organizer', 'admi
     return res.status(500).json({ error: 'Failed to post event update.' });
   }
 });
-
-// Helper to escape CSV field values safely against formula injection and delimiters (FR-10)
+// Helper to escape CSV field values safely
 function escapeCsvValue(val) {
   if (val === null || val === undefined) return '""';
+
   let str = String(val);
-  // Protect against spreadsheet formula injection (=, +, -, @, tab, CR, pipe, semicolon, or formula with leading whitespace)
+
+  // Protect against spreadsheet formula injection
   if (/^\s*[=+\-@|;\t\r\n]/.test(str)) {
     str = "'" + str;
   }
-  // Escape inner double quotes
+
   str = str.replace(/"/g, '""');
   return `"${str}"`;
 }
 
-// GET /api/events/:id/report (FR-10, UC-20, TC-15) - Generate registration report
+// GET /api/events/:id/report - Generate registration report
 router.get('/:id/report', authenticateToken, authorizeRoles('organizer', 'admin'), (req, res) => {
   const eventId = req.params.id;
   const format = (req.query.format || '').toLowerCase();
@@ -500,10 +442,12 @@ router.get('/:id/report', authenticateToken, authorizeRoles('organizer', 'admin'
 
     const confirmed = participants.filter(p => p.status === 'confirmed');
     const cancelled = participants.filter(p => p.status === 'cancelled');
+
     const confirmedCount = confirmed.length;
     const cancelledCount = cancelled.length;
     const capacity = Number(event.capacity);
     const availableSpots = Math.max(0, capacity - confirmedCount);
+
     const occupancyPercentage = capacity > 0
       ? Number(((confirmedCount / capacity) * 100).toFixed(2))
       : 0;
@@ -541,6 +485,7 @@ router.get('/:id/report', authenticateToken, authorizeRoles('organizer', 'admin'
 
     if (format === 'csv') {
       const csvLines = [];
+
       csvLines.push(`${escapeCsvValue('Event Registration Report')},${escapeCsvValue(event.title)}`);
       csvLines.push(`${escapeCsvValue('Event Date')},${escapeCsvValue(event.date + ' ' + event.time)}`);
       csvLines.push(`${escapeCsvValue('Location')},${escapeCsvValue(event.location)}`);
@@ -551,6 +496,7 @@ router.get('/:id/report', authenticateToken, authorizeRoles('organizer', 'admin'
       csvLines.push(`${escapeCsvValue('Occupancy Rate (%)')},${escapeCsvValue(occupancyPercentage + '%')}`);
       csvLines.push(`${escapeCsvValue('Report Generated At')},${escapeCsvValue(reportData.generated_at)}`);
       csvLines.push('');
+
       csvLines.push([
         escapeCsvValue('Registration ID'),
         escapeCsvValue('Attendee Name'),
@@ -574,10 +520,12 @@ router.get('/:id/report', authenticateToken, authorizeRoles('organizer', 'admin'
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${sanitizedFilename}"`);
+
       return res.status(200).send(csvContent);
     }
 
     return res.status(200).json(reportData);
+
   } catch (err) {
     console.error('Generate report error:', err);
     return res.status(500).json({ error: 'Failed to generate registration report.' });
@@ -585,3 +533,4 @@ router.get('/:id/report', authenticateToken, authorizeRoles('organizer', 'admin'
 });
 
 module.exports = router;
+
