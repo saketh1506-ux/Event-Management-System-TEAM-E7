@@ -5,9 +5,10 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const db = require('../db');
 const { JWT_SECRET, authenticateToken, revokeToken } = require('../middleware/auth');
+const { validatePayload, authSchemas } = require('../middleware/validate');
 
 // POST /api/auth/register (FR-01, TC-01)
-router.post('/register', (req, res) => {
+router.post('/register', validatePayload(authSchemas.register), (req, res) => {
   const { name, email, password, role } = req.body;
 
   if (!name || !email || !password) {
@@ -60,7 +61,7 @@ router.post('/register', (req, res) => {
 });
 
 // POST /api/auth/login (FR-01, TC-01, TC-02)
-router.post('/login', (req, res) => {
+router.post('/login', validatePayload(authSchemas.login), (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {

@@ -1214,3 +1214,242 @@ test('FR-10-08: CSV export has correct headers, rows, content type, attachment d
   // Clean up formula user
   db.prepare('DELETE FROM users WHERE email = ?').run(formulaEmail);
 });
+
+
+// --- SEC-03: Inbound Payload Validation & Sanitization ---
+
+test('SEC-03-01: Password preservation across validation without mutation or trimming', async () => {
+  const specialPassword = ' P@$$w0rd & "Quotes" <tag> ';
+  const testEmail = `password_preservation_${Date.now()}@example.com`;
+
+  const regRes = await request('POST', '/api/auth/register', {
+    name: 'Password Test User',
+    email: testEmail,
+    password: specialPassword
+  });
+  assert.strictEqual(regRes.status, 201);
+
+  // Attempt login with trimmed password -> must fail because password was NOT trimmed
+  const trimmedLoginRes = await request('POST', '/api/auth/login', {
+    email: testEmail,
+    password: specialPassword.trim()
+  });
+  assert.strictEqual(trimmedLoginRes.status, 401);
+
+  // Attempt login with exact unmodified password -> must succeed
+  const exactLoginRes = await request('POST', '/api/auth/login', {
+    email: testEmail,
+    password: specialPassword
+  });
+  assert.strictEqual(exactLoginRes.status, 200);
+
+  // Clean up
+  db.prepare('DELETE FROM users WHERE email = ?').run(testEmail);
+});
+
+test('SEC-03-02: Public registration strictly rejects admin role assignment (400)', async () => {
+  const adminBeforeCount = db.prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'admin'").get().count;
+
+  const res = await request('POST', '/api/auth/register', {
+    name: 'Escalation Hacker',
+    email: `escalation_${Date.now()}@example.com`,
+    password: 'Password123',
+    role: 'admin'
+  });
+
+  assert.strictEqual(res.status, 400);
+  assert.match(res.body.error, /Administrator accounts cannot be registered publicly/i);
+
+  const adminAfterCount = db.prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'admin'").get().count;
+  assert.strictEqual(adminAfterCount, adminBeforeCount, 'Admin user count must not increase');
+});
+
+test('SEC-03-03: Unicode and legitimate punctuation preservation in event fields', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+
+  const unicodeTitle = "René's AI & ML Workshop — (PES & AT&T)";
+  const unicodeDesc = "Discussing C++, O'Reilly books, café meetups & 日本語 accents.";
+
+  const createRes = await request('POST', '/api/events', {
+    title: unicodeTitle,
+    description: unicodeDesc,
+    category: 'Technology',
+    location: "O'Connell Street, Dublin",
+    date: '2026-12-15',
+    time: '14:30 - 16:30',
+    capacity: 50
+  }, orgLogin.body.token);
+
+  assert.strictEqual(createRes.status, 201);
+  const createdId = createRes.body.event.id;
+
+  const fetchRes = await request('GET', `/api/events/${createdId}`);
+  assert.strictEqual(fetchRes.status, 200);
+  assert.strictEqual(fetchRes.body.event.title, unicodeTitle);
+  assert.strictEqual(fetchRes.body.event.description, unicodeDesc);
+  assert.strictEqual(fetchRes.body.event.location, "O'Connell Street, Dublin");
+
+  // Clean up
+  db.prepare('DELETE FROM events WHERE id = ?').run(createdId);
+});
+
+test('SEC-03-04: XSS script tag stripping and sanitization on announcement updates', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+
+  // Post update with script and iframe tags
+  const xssRes = await request('POST', '/api/events/1/updates', {
+    title: "<script>alert('XSS')</script>Important Announcement",
+    message: "Please note: <iframe src='evil.com'></iframe>Venue changed to Hall A<script src='x.js'></script>."
+  }, orgLogin.body.token);
+
+  assert.strictEqual(xssRes.status, 201);
+  assert.ok(!xssRes.body.update.title.includes('<script>'), 'Title must not contain script tags');
+  assert.ok(!xssRes.body.update.message.includes('<iframe'), 'Message must not contain iframe tags');
+  assert.ok(xssRes.body.update.title.includes('Important Announcement'));
+  assert.ok(xssRes.body.update.message.includes('Venue changed to Hall A.'));
+
+  // Clean up update
+  db.prepare('DELETE FROM event_updates WHERE id = ?').run(xssRes.body.update.id);
+});
+
+test('SEC-03-05: Express rejects malformed JSON payload with HTTP 400', async () => {
+  const malformedPayload = '{"title": "Unclosed JSON string';
+
+  const res = await new Promise((resolve) => {
+    const u = new URL(baseUrl + '/api/events');
+    const req = http.request(u, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(malformedPayload),
+        'Connection': 'close'
+      }
+    }, (response) => {
+      let data = '';
+      response.on('data', chunk => data += chunk);
+      response.on('end', () => {
+        try {
+          resolve({ status: response.statusCode, body: JSON.parse(data) });
+        } catch {
+          resolve({ status: response.statusCode, body: data });
+        }
+      });
+    });
+    req.write(malformedPayload);
+    req.end();
+  });
+
+  assert.strictEqual(res.status, 400);
+  assert.strictEqual(res.body.error, 'Invalid JSON payload.');
+});
+
+test('SEC-03-06: Express rejects unexpected body types (array or primitive) (400)', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+
+  // Send an array instead of JSON object
+  const arrayRes = await request('POST', '/api/events', [1, 2, 3], orgLogin.body.token);
+  assert.strictEqual(arrayRes.status, 400);
+  assert.strictEqual(arrayRes.body.error, 'Request body must be a valid JSON object.');
+});
+
+test('SEC-03-07: Route parameter integer validation on :id endpoints (400)', async () => {
+  const userLogin = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  assert.strictEqual(userLogin.status, 200);
+
+  // String ID
+  const stringIdRes = await request('GET', '/api/events/abc');
+  assert.strictEqual(stringIdRes.status, 400);
+  assert.strictEqual(stringIdRes.body.error, 'Invalid ID parameter.');
+
+  // Negative ID
+  const negativeIdRes = await request('POST', '/api/events/-5/register', {}, userLogin.body.token);
+  assert.strictEqual(negativeIdRes.status, 400);
+  assert.strictEqual(negativeIdRes.body.error, 'Invalid ID parameter.');
+});
+
+test('SEC-03-08: Oversized string payloads rejected (400)', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+
+  // Oversized event title (> 150 chars)
+  const oversizedTitle = 'A'.repeat(200);
+  const res = await request('POST', '/api/events', {
+    title: oversizedTitle,
+    category: 'Technology',
+    location: 'Campus',
+    date: '2026-12-20',
+    time: '10:00 AM',
+    capacity: 100
+  }, orgLogin.body.token);
+
+  assert.strictEqual(res.status, 400);
+  assert.match(res.body.error, /Title must be between 1 and 150 characters/i);
+});
+
+test('SEC-03-09: Complete SEC-05 and existing suite compatibility check', async () => {
+  // Verify that an injection-style string in registration email still cleanly fails validation with 400
+  const malformedEmailRes = await request('POST', '/api/auth/register', {
+    name: 'Validation Compatibility',
+    email: "security' OR '1'='1@example.com",
+    password: 'Password123'
+  });
+  assert.strictEqual(malformedEmailRes.status, 400);
+});
+
+test('SEC-03-10: SVG, image-based XSS vectors, and dangerous URI schemes are sanitized', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+  const orgToken = orgLogin.body.token;
+
+  // Payload containing SVG with onload, img with onerror, and javascript: URI
+  const res = await request('POST', '/api/events', {
+    title: 'Clean SVG Workshop <svg onload=alert(1)>',
+    category: 'Technology',
+    description: 'Safe content with <img src="x" onerror="alert(2)"> and <a href="javascript:alert(3)">link</a> with legitimate café & "quotes" 🎉',
+    location: 'Auditorium 1',
+    date: '2026-12-25',
+    time: '02:00 PM',
+    capacity: 50
+  }, orgToken);
+
+  assert.strictEqual(res.status, 201);
+  const createdEvent = res.body.event;
+
+  // SVG markup stripped
+  assert.doesNotMatch(createdEvent.title, /<svg/i);
+  assert.doesNotMatch(createdEvent.title, /onload/i);
+  assert.strictEqual(createdEvent.title, 'Clean SVG Workshop');
+
+  // img onerror and javascript: stripped
+  assert.doesNotMatch(createdEvent.description, /onerror/i);
+  assert.doesNotMatch(createdEvent.description, /javascript:/i);
+
+  // Legitimate accents, quotes, and emojis preserved
+  assert.match(createdEvent.description, /café/);
+  assert.match(createdEvent.description, /"quotes"/);
+  assert.match(createdEvent.description, /🎉/);
+
+  // Cleanup created event
+  db.prepare('DELETE FROM events WHERE id = ?').run(createdEvent.id);
+});
