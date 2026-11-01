@@ -276,17 +276,21 @@ router.post('/:id/register', validateParams('id'), authenticateToken, (req, res)
   const userId = req.user.id;
 
   try {
-    const event = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
-
-    if (!event) {
-      return res.status(404).json({ error: 'Event not found.' });
-    }
-
-    if (event.status === 'cancelled') {
-      return res.status(400).json({ error: 'Cannot register for a cancelled event.' });
-    }
-
     const registrationTransaction = db.transaction(() => {
+      const event = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+
+      if (!event) {
+        const error = new Error('Event not found.');
+        error.status = 404;
+        throw error;
+      }
+
+      if (event.status === 'cancelled') {
+        const error = new Error('Cannot register for a cancelled event.');
+        error.status = 400;
+        throw error;
+      }
+
       const existingReg = db.prepare(`
         SELECT * FROM registrations WHERE event_id = ? AND user_id = ?
       `).get(eventId, userId);
