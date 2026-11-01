@@ -16,6 +16,14 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// Centralized handler for malformed JSON payloads (SEC-03)
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ error: 'Invalid JSON payload.' });
+  }
+  next(err);
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes);

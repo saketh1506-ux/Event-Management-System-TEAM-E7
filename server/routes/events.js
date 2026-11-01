@@ -5,6 +5,7 @@ const router = express.Router();
 const db = require('../db');
 
 const { authenticateToken, optionalAuthenticate, authorizeRoles } = require('../middleware/auth');
+const { validatePayload, validateParams, eventSchemas } = require('../middleware/validate');
 
 // Helper to get registration count for an event
 function getRegistrationCount(eventId) {
@@ -77,7 +78,7 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/events/:id (FR-03, UC-03) - View event details
-router.get('/:id', optionalAuthenticate, (req, res) => {
+router.get('/:id', validateParams('id'), optionalAuthenticate, (req, res) => {
   try {
     const eventId = req.params.id;
 
@@ -132,7 +133,7 @@ router.get('/:id', optionalAuthenticate, (req, res) => {
 });
 
 // POST /api/events (FR-07, OR-01, OR-04, UC-11) - Create event (Organizer / Admin)
-router.post('/', authenticateToken, authorizeRoles('organizer', 'admin'), (req, res) => {
+router.post('/', authenticateToken, authorizeRoles('organizer', 'admin'), validatePayload(eventSchemas.create), (req, res) => {
   const { title, description, category, location, date, time, capacity } = req.body;
 
   if (!title || !location || !date || !time || !capacity) {
@@ -176,7 +177,7 @@ router.post('/', authenticateToken, authorizeRoles('organizer', 'admin'), (req, 
 });
 
 // PUT /api/events/:id (FR-07, OR-02, UC-12) - Edit event (Organizer / Admin)
-router.put('/:id', authenticateToken, authorizeRoles('organizer', 'admin'), (req, res) => {
+router.put('/:id', validateParams('id'), authenticateToken, authorizeRoles('organizer', 'admin'), validatePayload(eventSchemas.update), (req, res) => {
   const eventId = req.params.id;
   const { title, description, category, location, date, time, capacity, status } = req.body;
 
@@ -238,7 +239,7 @@ router.put('/:id', authenticateToken, authorizeRoles('organizer', 'admin'), (req
 });
 
 // DELETE /api/events/:id (FR-07, OR-03, AR-05, UC-13, UC-19) - Cancel or Remove event
-router.delete('/:id', authenticateToken, authorizeRoles('organizer', 'admin'), (req, res) => {
+router.delete('/:id', validateParams('id'), authenticateToken, authorizeRoles('organizer', 'admin'), (req, res) => {
   const eventId = req.params.id;
 
   try {
@@ -270,7 +271,7 @@ router.delete('/:id', authenticateToken, authorizeRoles('organizer', 'admin'), (
 });
 
 // POST /api/events/:id/register (FR-04, FR-05, UR-06, TC-04, TC-05, TC-06) - Register for event
-router.post('/:id/register', authenticateToken, (req, res) => {
+router.post('/:id/register', validateParams('id'), authenticateToken, (req, res) => {
   const eventId = req.params.id;
   const userId = req.user.id;
 
@@ -346,7 +347,7 @@ router.post('/:id/register', authenticateToken, (req, res) => {
 });
 
 // DELETE /api/events/:id/register (FR-05, UR-07, TC-07) - Cancel registration
-router.delete('/:id/register', authenticateToken, (req, res) => {
+router.delete('/:id/register', validateParams('id'), authenticateToken, (req, res) => {
   const eventId = req.params.id;
   const userId = req.user.id;
 
@@ -376,7 +377,7 @@ router.delete('/:id/register', authenticateToken, (req, res) => {
 });
 
 // GET /api/events/:id/participants (FR-08, OR-05, OR-06, UC-15) - View participants
-router.get('/:id/participants', authenticateToken, authorizeRoles('organizer', 'admin'), (req, res) => {
+router.get('/:id/participants', validateParams('id'), authenticateToken, authorizeRoles('organizer', 'admin'), (req, res) => {
   const eventId = req.params.id;
 
   try {
@@ -418,7 +419,7 @@ router.get('/:id/participants', authenticateToken, authorizeRoles('organizer', '
 });
 
 // POST /api/events/:id/updates (FR-09, OR-07, UC-16) - Send an event update
-router.post('/:id/updates', authenticateToken, authorizeRoles('organizer', 'admin'), (req, res) => {
+router.post('/:id/updates', validateParams('id'), authenticateToken, authorizeRoles('organizer', 'admin'), validatePayload(eventSchemas.announcement), (req, res) => {
   const eventId = req.params.id;
   const { title, message } = req.body;
 
@@ -469,7 +470,7 @@ function escapeCsvValue(val) {
 }
 
 // GET /api/events/:id/report (FR-10, UC-20, TC-15) - Generate registration report
-router.get('/:id/report', authenticateToken, authorizeRoles('organizer', 'admin'), (req, res) => {
+router.get('/:id/report', validateParams('id'), authenticateToken, authorizeRoles('organizer', 'admin'), (req, res) => {
   const eventId = req.params.id;
   const format = (req.query.format || '').toLowerCase();
 

@@ -249,16 +249,16 @@ class App {
       return `
         <div class="event-card">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span class="event-badge">${evt.category}</span>
+            <span class="event-badge">${this.escapeHtml(evt.category)}</span>
             ${isCancelled ? '<span style="color: var(--danger); font-size: 0.8rem; font-weight: 700;">CANCELLED</span>' : ''}
           </div>
-          <h3>${evt.title}</h3>
-          <p class="description">${evt.description || 'No description provided.'}</p>
+          <h3>${this.escapeHtml(evt.title)}</h3>
+          <p class="description">${this.escapeHtml(evt.description || 'No description provided.')}</p>
 
-          <div class="event-meta">
-            <span><i class="fa-regular fa-calendar" style="color: var(--secondary);"></i> ${evt.date} at ${evt.time}</span>
-            <span><i class="fa-solid fa-location-dot" style="color: #ec4899;"></i> ${evt.location}</span>
-            <span><i class="fa-solid fa-user-tie" style="color: #a78bfa;"></i> Hosted by ${evt.organizer_name}</span>
+<div class="event-meta">
+            <span><i class="fa-regular fa-calendar" style="color: var(--secondary);"></i> ${this.escapeHtml(evt.date)} at ${this.escapeHtml(evt.time)}</span>
+            <span><i class="fa-solid fa-location-dot" style="color: #ec4899;"></i> ${this.escapeHtml(evt.location)}</span>
+            <span><i class="fa-solid fa-user-tie" style="color: #a78bfa;"></i> Hosted by ${this.escapeHtml(evt.organizer_name)}</span>
           </div>
 
           <div class="capacity-bar-container">
@@ -351,7 +351,7 @@ class App {
             <h4 style="color: var(--secondary); margin-bottom: 0.5rem;"><i class="fa-solid fa-bullhorn"></i> Organizer Announcements</h4>
             ${data.notifications.map(n => `
               <div style="margin-bottom: 0.5rem; font-size: 0.9rem;">
-                <strong>[${n.event_title}] ${n.title}:</strong> ${n.message} <span style="font-size: 0.75rem; color: var(--text-muted);">${new Date(n.sent_at).toLocaleString()}</span>
+                <strong>[${this.escapeHtml(n.event_title)}] ${this.escapeHtml(n.title)}:</strong> ${this.escapeHtml(n.message)} <span style="font-size: 0.75rem; color: var(--text-muted);">${new Date(n.sent_at).toLocaleString()}</span>
               </div>
             `).join('')}
           </div>
@@ -372,12 +372,12 @@ class App {
 
       container.innerHTML = data.registrations.map(evt => `
         <div class="event-card">
-          <span class="event-badge">${evt.category}</span>
-          <h3>${evt.title}</h3>
+          <span class="event-badge">${this.escapeHtml(evt.category)}</span>
+          <h3>${this.escapeHtml(evt.title)}</h3>
           <div class="event-meta">
-            <span><i class="fa-regular fa-calendar"></i> ${evt.date} at ${evt.time}</span>
-            <span><i class="fa-solid fa-location-dot"></i> ${evt.location}</span>
-            <span><i class="fa-solid fa-badge-check" style="color: var(--success);"></i> Status: <strong>${evt.registration_status.toUpperCase()}</strong></span>
+            <span><i class="fa-regular fa-calendar"></i> ${this.escapeHtml(evt.date)} at ${this.escapeHtml(evt.time)}</span>
+            <span><i class="fa-solid fa-location-dot"></i> ${this.escapeHtml(evt.location)}</span>
+            <span><i class="fa-solid fa-badge-check" style="color: var(--success);"></i> Status: <strong>${this.escapeHtml(evt.registration_status.toUpperCase())}</strong></span>
           </div>
           <div class="card-actions" style="margin-top: 1.5rem;">
             ${evt.registration_status === 'confirmed' ? `
@@ -415,12 +415,12 @@ class App {
 
       container.innerHTML = data.events.map(evt => `
         <div class="event-card">
-          <span class="event-badge">${evt.category}</span>
-          <h3>${evt.title}</h3>
+          <span class="event-badge">${this.escapeHtml(evt.category)}</span>
+          <h3>${this.escapeHtml(evt.title)}</h3>
           <div class="event-meta">
-            <span><i class="fa-regular fa-calendar"></i> ${evt.date} at ${evt.time}</span>
-            <span><i class="fa-solid fa-users"></i> Registered: <strong>${evt.registered_count} / ${evt.capacity}</strong></span>
-            <span>Status: <strong>${evt.status.toUpperCase()}</strong></span>
+            <span><i class="fa-regular fa-calendar"></i> ${this.escapeHtml(evt.date)} at ${this.escapeHtml(evt.time)}</span>
+            <span><i class="fa-solid fa-users"></i> Registered: <strong>${Number(evt.registered_count)} / ${Number(evt.capacity)}</strong></span>
+            <span>Status: <strong>${this.escapeHtml(evt.status.toUpperCase())}</strong></span>
           </div>
           <div class="card-actions" style="flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem;">
             <button class="btn-secondary" onclick="app.editEvent(${evt.id})"><i class="fa-solid fa-pen-to-square"></i> Edit</button>
@@ -684,7 +684,7 @@ class App {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      document.getElementById('modal-event-title').innerText = `Participants: ${data.event_title}`;
+      document.getElementById('modal-event-title').textContent = `Participants: ${data.event_title}`;
       const body = document.getElementById('modal-event-body');
 
       body.innerHTML = `
@@ -714,10 +714,10 @@ class App {
               <tbody>
                 ${data.participants.map(p => `
                   <tr>
-                    <td><strong>${p.name}</strong></td>
-                    <td>${p.email}</td>
+                    <td><strong>${this.escapeHtml(p.name)}</strong></td>
+                    <td>${this.escapeHtml(p.email)}</td>
                     <td>${new Date(p.registered_at).toLocaleDateString()}</td>
-                    <td><span style="color: ${p.status === 'confirmed' ? 'var(--success)' : 'var(--text-muted)'}; font-weight: 600;">${p.status.toUpperCase()}</span></td>
+                    <td><span style="color: ${p.status === 'confirmed' ? 'var(--success)' : 'var(--text-muted)'}; font-weight: 600;">${this.escapeHtml(p.status.toUpperCase())}</span></td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -773,18 +773,18 @@ class App {
       if (!res.ok) throw new Error(data.error);
 
       const evt = data.event;
-      document.getElementById('modal-event-title').innerText = evt.title;
+      document.getElementById('modal-event-title').textContent = evt.title;
       const body = document.getElementById('modal-event-body');
 
       body.innerHTML = `
-        <span class="event-badge">${evt.category}</span>
-        <p style="margin: 1rem 0; color: #cbd5e1; font-size: 1rem; line-height: 1.6;">${evt.description || 'No detailed description.'}</p>
+        <span class="event-badge">${this.escapeHtml(evt.category)}</span>
+        <p style="margin: 1rem 0; color: #cbd5e1; font-size: 1rem; line-height: 1.6;">${this.escapeHtml(evt.description || 'No detailed description.')}</p>
 
-        <div style="background: var(--bg-main); padding: 1.25rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 1.5rem;">
-          <div style="margin-bottom: 0.5rem;"><i class="fa-regular fa-calendar" style="color: var(--secondary);"></i> <strong>Date & Time:</strong> ${evt.date} at ${evt.time}</div>
-          <div style="margin-bottom: 0.5rem;"><i class="fa-solid fa-location-dot" style="color: #ec4899;"></i> <strong>Venue:</strong> ${evt.location}</div>
-          <div style="margin-bottom: 0.5rem;"><i class="fa-solid fa-user-tie" style="color: #a78bfa;"></i> <strong>Organizer:</strong> ${evt.organizer_name} (${evt.organizer_email})</div>
-          <div><i class="fa-solid fa-users" style="color: var(--success);"></i> <strong>Capacity:</strong> ${evt.registered_count} / ${evt.capacity} spots filled (${evt.spots_left} spots left)</div>
+<div style="background: var(--bg-main); padding: 1.25rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 1.5rem;">
+          <div style="margin-bottom: 0.5rem;"><i class="fa-regular fa-calendar" style="color: var(--secondary);"></i> <strong>Date & Time:</strong> ${this.escapeHtml(evt.date)} at ${this.escapeHtml(evt.time)}</div>
+          <div style="margin-bottom: 0.5rem;"><i class="fa-solid fa-location-dot" style="color: #ec4899;"></i> <strong>Venue:</strong> ${this.escapeHtml(evt.location)}</div>
+          <div style="margin-bottom: 0.5rem;"><i class="fa-solid fa-user-tie" style="color: #a78bfa;"></i> <strong>Organizer:</strong> ${this.escapeHtml(evt.organizer_name)} (${this.escapeHtml(evt.organizer_email)})</div>
+          <div><i class="fa-solid fa-users" style="color: var(--success);"></i> <strong>Capacity:</strong> ${Number(evt.registered_count)} / ${Number(evt.capacity)} spots filled (${Number(evt.spots_left)} spots left)</div>
         </div>
 
         ${evt.updates && evt.updates.length > 0 ? `
@@ -792,8 +792,8 @@ class App {
           <div style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.75rem;">
             ${evt.updates.map(u => `
               <div style="background: rgba(255,255,255,0.03); border-left: 3px solid var(--secondary); padding: 0.75rem 1rem; border-radius: 4px;">
-                <strong>${u.title}</strong>
-                <p style="font-size: 0.9rem; color: var(--text-muted);">${u.message}</p>
+                <strong>${this.escapeHtml(u.title)}</strong>
+                <p style="font-size: 0.9rem; color: var(--text-muted);">${this.escapeHtml(u.message)}</p>
                 <span style="font-size: 0.75rem; color: var(--text-muted);">${new Date(u.sent_at).toLocaleString()}</span>
               </div>
             `).join('')}
@@ -840,8 +840,8 @@ class App {
       usersTable.innerHTML = usersData.users.map(u => `
         <tr>
           <td>#${u.id}</td>
-          <td><strong>${u.name}</strong></td>
-          <td>${u.email}</td>
+          <td><strong>${this.escapeHtml(u.name)}</strong></td>
+          <td>${this.escapeHtml(u.email)}</td>
           <td>
             <select class="form-control" style="padding: 0.3rem; font-size: 0.85rem;" onchange="app.changeUserRole(${u.id}, this.value)">
               <option value="user" ${u.role === 'user' ? 'selected' : ''}>Attendee (user)</option>
@@ -868,9 +868,9 @@ class App {
       const reportsTable = document.getElementById('admin-reports-table');
       reportsTable.innerHTML = reportsData.report.map(r => `
         <tr>
-          <td><strong>${r.title}</strong></td>
-          <td>${r.category}</td>
-          <td>${r.organizer_name}</td>
+          <td><strong>${this.escapeHtml(r.title)}</strong></td>
+          <td>${this.escapeHtml(r.category)}</td>
+          <td>${this.escapeHtml(r.organizer_name)}</td>
           <td>${r.capacity}</td>
           <td>${r.confirmed_count}</td>
           <td>
@@ -970,7 +970,13 @@ class App {
     if (type === 'success') icon = 'circle-check';
     if (type === 'error') icon = 'circle-exclamation';
 
-    toast.innerHTML = `<i class="fa-solid fa-${icon}"></i> <span>${message}</span>`;
+    const iconEl = document.createElement('i');
+    iconEl.className = `fa-solid fa-${icon}`;
+    const textEl = document.createElement('span');
+    textEl.textContent = message;
+    toast.appendChild(iconEl);
+    toast.appendChild(document.createTextNode(' '));
+    toast.appendChild(textEl);
     container.appendChild(toast);
 
     setTimeout(() => {
