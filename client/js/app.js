@@ -33,7 +33,6 @@ class App {
         headers: { 'Authorization': `Bearer ${this.token}` }
       });
       if (res.status === 401) {
-        // Token has expired or been revoked; silently reset stale session
         this.token = null;
         this.currentUser = null;
         localStorage.removeItem('token');
@@ -186,17 +185,34 @@ class App {
   async fetchEvents() {
     const search = document.getElementById('search-input')?.value || '';
     const category = document.getElementById('category-filter')?.value || 'All';
+    const date = document.getElementById('date-filter')?.value || '';
 
-    let url = `${API_BASE}/events?`;
-    if (search.trim()) url += `search=${encodeURIComponent(search.trim())}&`;
-    if (category && category !== 'All') url += `category=${encodeURIComponent(category)}&`;
+    const params = new URLSearchParams();
+
+    if (search.trim()) {
+      params.append('search', search.trim());
+    }
+
+    if (category && category !== 'All') {
+      params.append('category', category);
+    }
+
+    if (date) {
+      params.append('date', date);
+    }
 
     try {
-      const res = await fetch(url);
+      const res = await fetch(`${API_BASE}/events?${params.toString()}`);
       const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to load events.');
+      }
+
       this.events = data.events || [];
       this.renderEvents(this.events, 'events-list');
     } catch (err) {
+      console.error('Fetch events error:', err);
       this.toast('Failed to load events.', 'error');
     }
   }
@@ -238,8 +254,8 @@ class App {
           </div>
           <h3>${this.escapeHtml(evt.title)}</h3>
           <p class="description">${this.escapeHtml(evt.description || 'No description provided.')}</p>
-          
-          <div class="event-meta">
+
+<div class="event-meta">
             <span><i class="fa-regular fa-calendar" style="color: var(--secondary);"></i> ${this.escapeHtml(evt.date)} at ${this.escapeHtml(evt.time)}</span>
             <span><i class="fa-solid fa-location-dot" style="color: #ec4899;"></i> ${this.escapeHtml(evt.location)}</span>
             <span><i class="fa-solid fa-user-tie" style="color: #a78bfa;"></i> Hosted by ${this.escapeHtml(evt.organizer_name)}</span>
@@ -670,7 +686,7 @@ class App {
 
       document.getElementById('modal-event-title').textContent = `Participants: ${data.event_title}`;
       const body = document.getElementById('modal-event-body');
-      
+
       body.innerHTML = `
         <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
           <div class="stat-card" style="padding: 1rem; flex: 1;">
@@ -763,8 +779,8 @@ class App {
       body.innerHTML = `
         <span class="event-badge">${this.escapeHtml(evt.category)}</span>
         <p style="margin: 1rem 0; color: #cbd5e1; font-size: 1rem; line-height: 1.6;">${this.escapeHtml(evt.description || 'No detailed description.')}</p>
-        
-        <div style="background: var(--bg-main); padding: 1.25rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 1.5rem;">
+
+<div style="background: var(--bg-main); padding: 1.25rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 1.5rem;">
           <div style="margin-bottom: 0.5rem;"><i class="fa-regular fa-calendar" style="color: var(--secondary);"></i> <strong>Date & Time:</strong> ${this.escapeHtml(evt.date)} at ${this.escapeHtml(evt.time)}</div>
           <div style="margin-bottom: 0.5rem;"><i class="fa-solid fa-location-dot" style="color: #ec4899;"></i> <strong>Venue:</strong> ${this.escapeHtml(evt.location)}</div>
           <div style="margin-bottom: 0.5rem;"><i class="fa-solid fa-user-tie" style="color: #a78bfa;"></i> <strong>Organizer:</strong> ${this.escapeHtml(evt.organizer_name)} (${this.escapeHtml(evt.organizer_email)})</div>
@@ -949,7 +965,7 @@ class App {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    
+
     let icon = 'info-circle';
     if (type === 'success') icon = 'circle-check';
     if (type === 'error') icon = 'circle-exclamation';
