@@ -2,7 +2,11 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const db = require('../db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'ems_super_secret_jwt_key_team_e7_pes';
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET must be configured in production.');
+}
+
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 
 function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');

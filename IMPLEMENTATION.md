@@ -20,14 +20,14 @@ The system is a web-based application that supports event discovery, registratio
 | ID | Module / Requirement | Implementation File | Status |
 |---|---|---|---|
 | **FR-01** | Account Registration and Secure Login | `server/routes/auth.js`, `server/middleware/auth.js` | Implemented; authentication and password hashing covered by automated tests |
-| **FR-02** | Event Browsing, Search, and Filtering | `server/routes/events.js`, `client/js/app.js` | Implemented |
-| **FR-03** | Event Details and Capacity View | `server/routes/events.js`, `client/js/app.js` | Implemented |
-| **FR-04** | Capacity Validation on Registration | `server/routes/events.js` (`POST /api/events/:id/register`) | Implemented; full-capacity and concurrent-registration tests pass |
-| **FR-05** | Duplicate Prevention and Registration Cancellation | `server/routes/events.js` | Implemented; registration lifecycle tests pass |
+| **FR-02** | Event Browsing, Search, and Filtering | `server/routes/events.js`, `server/controllers/eventController.js`, `server/services/eventService.js`, `server/models/eventModel.js`, `client/js/app.js` | Implemented |
+| **FR-03** | Event Details and Capacity View | `server/controllers/eventController.js`, `server/services/eventService.js`, `server/models/eventModel.js` | Implemented |
+| **FR-04** | Capacity Validation on Registration | `server/services/eventService.js`, `server/models/eventModel.js` (`POST /api/events/:id/register`) | Implemented; concurrent registration remains transaction-protected |
+| **FR-05** | Duplicate Prevention and Registration Cancellation | `server/services/eventService.js`, `server/models/eventModel.js` | Implemented |
 | **FR-06** | Attendee Dashboard and Registered Events | `server/routes/users.js` (`GET /api/users/me/events`) | Implemented |
-| **FR-07** | Organizer Event Creation, Modification, and Cancellation | `server/routes/events.js` | Implemented |
-| **FR-08** | Organizer Participant Roster and Capacity Tracking | `server/routes/events.js` (`GET /api/events/:id/participants`) | Implemented |
-| **FR-09** | Organizer Broadcast Updates and Notifications | `server/routes/events.js` (`POST /api/events/:id/updates`) | Implemented |
+| **FR-07** | Organizer Event Creation, Modification, and Cancellation | `server/controllers/eventController.js`, `server/services/eventService.js`, `server/models/eventModel.js` | Implemented |
+| **FR-08** | Organizer Participant Roster and Capacity Tracking | `server/services/eventService.js`, `server/models/eventModel.js` (`GET /api/events/:id/participants`) | Implemented |
+| **FR-09** | Organizer Broadcast Updates and Notifications | `server/services/eventService.js`, `server/models/eventModel.js` (`POST /api/events/:id/updates`) | Implemented |
 | **FR-10** | Administration: User Roles, Event Moderation, and Reports | `server/routes/admin.js`, `client/js/app.js` | Implemented |
 | **NFR-03** | Passwords Not Stored as Plain Text | `server/db.js`, `server/routes/auth.js` | Bcrypt password hashing; verified by an automated test |
 | **NFR-04** | Role-Based Authorization | `server/middleware/auth.js` | Role-based access controls; authorization tests pass |
@@ -48,8 +48,15 @@ Event-Management-System-TEAM-E7/
 │   └── js/
 │       └── app.js              # Frontend logic and API integration
 ├── server/
+│   ├── controllers/
+│   │   └── eventController.js  # HTTP request and response handling
 │   ├── db.js                   # SQLite database schema and seed data
+│   ├── models/
+│   │   └── eventModel.js       # Event-related database queries
 │   ├── server.js               # Express application and static file server
+│   ├── services/
+│   │   └── eventService.js     # Event rules, authorization, and calculations
+│   ├── .env.example            # Environment configuration template
 │   ├── middleware/
 │   │   └── auth.js             # JWT authentication and role authorization
 │   ├── routes/
@@ -85,7 +92,13 @@ cd server
 npm ci
 ```
 
-### 2. Start the Server and Web Application
+### 2. Configure the Environment
+
+From the `server` directory, copy `.env.example` to `.env`. Set a strong `JWT_SECRET`, a database path if desired, and distinct values for all five `EMS_SEED_*_PASSWORD` variables to create the demo accounts and sample events. The application loads `server/.env`; `.env` is ignored by Git.
+
+`PORT` defaults to `5000`. `EMS_DATABASE_PATH` is optional and defaults to `server/database.sqlite`. In production, `JWT_SECRET` is required. When no secret is configured outside production, a fresh random secret is generated at startup.
+
+### 3. Start the Server and Web Application
 
 From the `server` directory:
 
@@ -99,7 +112,7 @@ The server should display its startup message and listen at:
 http://localhost:5000
 ```
 
-### 3. Access the Application
+### 4. Access the Application
 
 Open the local URL in a web browser:
 
@@ -107,17 +120,11 @@ Open the local URL in a web browser:
 http://localhost:5000
 ```
 
-### 4. Preconfigured Test Accounts
+### 5. Optional Seeded Accounts
 
-The application includes seeded development accounts for testing.
+The five demo users and sample events are created only when all five seed-password environment variables are set and the database has no users. The test suite configures its own fixture passwords; do not reuse them for local or production environments.
 
-| Role | Email | Password |
-|---|---|---|
-| Administrator | `admin@ems.com` | `Admin@123` |
-| Organizer | `organizer@ems.com` | `Org@123` |
-| Attendee | `likhith@ems.com` | `User@123` |
-
-These credentials are for the seeded development environment only. They must not be used for a production deployment.
+Seeded account emails are `admin@ems.com`, `organizer@ems.com`, `neeraj@ems.com`, `likhith@ems.com`, and `adil@ems.com`; their passwords come from the corresponding values in `.env`.
 
 ---
 
@@ -131,7 +138,9 @@ Run the automated API suite from the `server` directory:
 node --test ./tests/api.test.js
 ```
 
-### Latest Recorded Local Test Result
+### Previous Recorded Local Test Result
+
+This result predates the layered architecture refactor and is retained as historical evidence only.
 
 | Metric | Result |
 |---|---:|

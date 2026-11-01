@@ -80,9 +80,22 @@ function initDb() {
     );
   `);
 
-  // Seed default accounts if empty
+  // Seed demo accounts only when each password is explicitly configured.
   const userCount = db.prepare('SELECT count(*) as count FROM users').get().count;
   if (userCount === 0) {
+    const seedUsers = [
+      { name: 'System Admin', email: 'admin@ems.com', role: 'admin', password: process.env.EMS_SEED_ADMIN_PASSWORD },
+      { name: 'Saketh Narayanam', email: 'organizer@ems.com', role: 'organizer', password: process.env.EMS_SEED_ORGANIZER_PASSWORD },
+      { name: 'Neeraj Gowda', email: 'neeraj@ems.com', role: 'organizer', password: process.env.EMS_SEED_SECOND_ORGANIZER_PASSWORD },
+      { name: 'Likhith Reddy', email: 'likhith@ems.com', role: 'user', password: process.env.EMS_SEED_ATTENDEE_PASSWORD },
+      { name: 'Adil Ahmed', email: 'adil@ems.com', role: 'user', password: process.env.EMS_SEED_SECOND_ATTENDEE_PASSWORD }
+    ];
+
+    if (seedUsers.some(user => !user.password)) {
+      console.warn('Skipping demo account and event seed; configure all EMS_SEED_*_PASSWORD values to enable it.');
+      return;
+    }
+
     const salt = bcrypt.genSaltSync(10);
     const hash = (pwd) => bcrypt.hashSync(pwd, salt);
 
@@ -91,16 +104,14 @@ function initDb() {
       VALUES (?, ?, ?, ?, 'active')
     `);
 
-    // Admin
-    insertUser.run('System Admin', 'admin@ems.com', hash('Admin@123'), 'admin');
-    // Organizers
-    insertUser.run('Saketh Narayanam', 'organizer@ems.com', hash('Org@123'), 'organizer');
-    insertUser.run('Neeraj Gowda', 'neeraj@ems.com', hash('Org@123'), 'organizer');
-    // Normal Users
-    insertUser.run('Likhith Reddy', 'likhith@ems.com', hash('User@123'), 'user');
-    insertUser.run('Adil Ahmed', 'adil@ems.com', hash('User@123'), 'user');
+    const seededUserIds = seedUsers.map(user => insertUser.run(
+      user.name,
+      user.email,
+      hash(user.password),
+      user.role
+    ).lastInsertRowid);
 
-    console.log('Seeded initial users (admin@ems.com, organizer@ems.com, likhith@ems.com, adil@ems.com)');
+    console.log('Seeded configured demo accounts.');
 
     // Seed sample events
     const insertEvent = db.prepare(`
@@ -116,7 +127,7 @@ function initDb() {
       '2026-11-15',
       '09:30 AM',
       50,
-      2
+      seededUserIds[1]
     );
 
     insertEvent.run(
@@ -127,7 +138,7 @@ function initDb() {
       '2026-11-20',
       '02:00 PM',
       30,
-      2
+      seededUserIds[1]
     );
 
     insertEvent.run(
@@ -138,7 +149,7 @@ function initDb() {
       '2026-12-05',
       '10:00 AM',
       100,
-      3
+      seededUserIds[2]
     );
 
     console.log('Seeded sample events');
