@@ -4,6 +4,11 @@ process.env.EMS_DATABASE_PATH = require('node:path').join(
   require('node:os').tmpdir(),
   `ems-api-test-${process.pid}-${Date.now()}.sqlite`
 );
+process.env.EMS_SEED_ADMIN_PASSWORD = 'Admin@123';
+process.env.EMS_SEED_ORGANIZER_PASSWORD = 'Org@123';
+process.env.EMS_SEED_SECOND_ORGANIZER_PASSWORD = 'Org@123';
+process.env.EMS_SEED_ATTENDEE_PASSWORD = 'User@123';
+process.env.EMS_SEED_SECOND_ATTENDEE_PASSWORD = 'User@123';
 
 const fs = require('node:fs');
 const os = require('node:os');
@@ -179,6 +184,65 @@ test('TC-03: Search and view an event (FR-02, FR-03)', async () => {
   assert.strictEqual(detailRes.status, 200);
   assert.strictEqual(detailRes.body.event.id, eventId);
   assert.ok(detailRes.body.event.capacity >= 1);
+});
+
+test('FR-02: Event listing preserves search, category, date, status, organizer, and capacity fields', async () => {
+  const organizer = db.prepare('SELECT id FROM users WHERE email = ?').get('organizer@ems.com');
+  const attendee = db.prepare('SELECT id FROM users WHERE email = ?').get('likhith@ems.com');
+  const suffix = Date.now();
+  const insertEvent = db.prepare(`
+    INSERT INTO events (title, description, category, location, date, time, capacity, organizer_id, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const activeId = insertEvent.run(
+    `Layered Search ${suffix} A`, 'Layered filter description', 'Technology', `Layered Hall ${suffix}`,
+    '2026-12-30', '09:00 AM', 2, organizer.id, 'active'
+  ).lastInsertRowid;
+  const cancelledId = insertEvent.run(
+    `Layered Search ${suffix} B`, 'Cancelled filter description', 'Workshop', `Other Hall ${suffix}`,
+    '2026-12-31', '10:00 AM', 1, organizer.id, 'cancelled'
+  ).lastInsertRowid;
+  const descriptionId = insertEvent.run(
+    `Other Listing ${suffix}`, `Layered Search ${suffix} in description`, 'Workshop', `Final Hall ${suffix}`,
+    '2026-12-31', '11:00 AM', 3, organizer.id, 'active'
+  ).lastInsertRowid;
+
+  db.prepare("INSERT INTO registrations (event_id, user_id, status) VALUES (?, ?, 'confirmed')")
+    .run(activeId, attendee.id);
+  db.prepare("INSERT INTO registrations (event_id, user_id, status) VALUES (?, ?, 'confirmed')")
+    .run(cancelledId, attendee.id);
+
+  try {
+    const listing = await request('GET', `/api/events/?search=${encodeURIComponent(`Layered Search ${suffix}`)}`);
+    assert.strictEqual(listing.status, 200);
+    assert.deepStrictEqual(listing.body.events.map(event => event.id), [activeId, cancelledId, descriptionId]);
+
+    const active = listing.body.events.find(event => event.id === activeId);
+    assert.strictEqual(active.organizer_name, 'Saketh Narayanam');
+    assert.strictEqual(active.organizer_email, 'organizer@ems.com');
+    assert.strictEqual(active.registered_count, 1);
+    assert.strictEqual(active.spots_left, 1);
+    assert.strictEqual(active.is_full, false);
+
+    const cancelled = listing.body.events.find(event => event.id === cancelledId);
+    assert.strictEqual(cancelled.registered_count, 1);
+    assert.strictEqual(cancelled.spots_left, 0);
+    assert.strictEqual(cancelled.is_full, true);
+
+    const category = await request('GET', `/api/events?category=Technology&search=${encodeURIComponent(`Layered Search ${suffix}`)}`);
+    assert.deepStrictEqual(category.body.events.map(event => event.id), [activeId]);
+
+    const date = await request('GET', `/api/events?date=2026-12-31&search=${encodeURIComponent(`Layered Search ${suffix}`)}`);
+    assert.deepStrictEqual(date.body.events.map(event => event.id), [cancelledId, descriptionId]);
+
+    const status = await request('GET', `/api/events?status=cancelled&search=${encodeURIComponent(`Layered Search ${suffix}`)}`);
+    assert.deepStrictEqual(status.body.events.map(event => event.id), [cancelledId]);
+
+    const deleted = await request('GET', `/api/events?status=deleted&search=${encodeURIComponent(`Layered Search ${suffix}`)}`);
+    assert.deepStrictEqual(deleted.body.events, []);
+  } finally {
+    db.prepare('DELETE FROM events WHERE id IN (?, ?, ?)').run(activeId, cancelledId, descriptionId);
+  }
 });
 
 test('TC-04, TC-06, TC-07: Register, Prevent Duplicate, and Cancel registration (FR-04, FR-05)', async () => {
@@ -450,6 +514,90 @@ test('TC-08: Organizer creates event and sets capacity (FR-07, FR-08)', async ()
   assert.strictEqual(res.status, 201);
   assert.strictEqual(res.body.event.capacity, 75);
   assert.strictEqual(res.body.event.title, eventData.title);
+});
+
+test('FR-07/FR-08: Event updates, capacity limits, participant access, and deletion preserve ownership rules', async () => {
+  const organizerLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  const otherOrganizerLogin = await request('POST', '/api/auth/login', {
+    email: 'neeraj@ems.com',
+    password: 'Org@123'
+  });
+  const attendeeLogin = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  const secondAttendeeLogin = await request('POST', '/api/auth/login', {
+    email: 'adil@ems.com',
+    password: 'User@123'
+  });
+  const adminLogin = await request('POST', '/api/auth/login', {
+    email: 'admin@ems.com',
+    password: 'Admin@123'
+  });
+  assert.strictEqual(organizerLogin.status, 200);
+  assert.strictEqual(otherOrganizerLogin.status, 200);
+  assert.strictEqual(attendeeLogin.status, 200);
+  assert.strictEqual(secondAttendeeLogin.status, 200);
+  assert.strictEqual(adminLogin.status, 200);
+
+  const created = await request('POST', '/api/events', {
+    title: `Layered Lifecycle ${Date.now()}`,
+    description: 'Testing event lifecycle behavior',
+    category: 'Workshop',
+    location: 'Lifecycle Hall',
+    date: '2026-12-27',
+    time: '10:00 AM',
+    capacity: 2
+  }, organizerLogin.body.token);
+  assert.strictEqual(created.status, 201);
+  const eventId = created.body.event.id;
+
+  try {
+    const otherOrganizerUpdate = await request('PUT', `/api/events/${eventId}`, { title: 'Unauthorized edit' }, otherOrganizerLogin.body.token);
+    assert.strictEqual(otherOrganizerUpdate.status, 403);
+
+    assert.strictEqual((await request('POST', `/api/events/${eventId}/register`, {}, attendeeLogin.body.token)).status, 201);
+    assert.strictEqual((await request('POST', `/api/events/${eventId}/register`, {}, secondAttendeeLogin.body.token)).status, 201);
+
+    const capacityReduction = await request('PUT', `/api/events/${eventId}`, { capacity: 1 }, organizerLogin.body.token);
+    assert.strictEqual(capacityReduction.status, 400);
+    assert.match(capacityReduction.body.error, /current confirmed registrations are 2/i);
+
+    const updated = await request('PUT', `/api/events/${eventId}`, {
+      title: 'Updated Layered Lifecycle',
+      capacity: 3
+    }, organizerLogin.body.token);
+    assert.strictEqual(updated.status, 200);
+    assert.strictEqual(updated.body.event.title, 'Updated Layered Lifecycle');
+    assert.strictEqual(updated.body.event.capacity, 3);
+
+    const participants = await request('GET', `/api/events/${eventId}/participants`, null, organizerLogin.body.token);
+    assert.strictEqual(participants.status, 200);
+    assert.strictEqual(participants.body.confirmed_count, 2);
+    assert.strictEqual(participants.body.cancelled_count, 0);
+    assert.strictEqual(participants.body.participants.length, 2);
+
+    const otherOrganizerParticipants = await request('GET', `/api/events/${eventId}/participants`, null, otherOrganizerLogin.body.token);
+    assert.strictEqual(otherOrganizerParticipants.status, 403);
+    const attendeeParticipants = await request('GET', `/api/events/${eventId}/participants`, null, attendeeLogin.body.token);
+    assert.strictEqual(attendeeParticipants.status, 403);
+
+    const otherOrganizerDelete = await request('DELETE', `/api/events/${eventId}`, {}, otherOrganizerLogin.body.token);
+    assert.strictEqual(otherOrganizerDelete.status, 403);
+
+    const cancelled = await request('DELETE', `/api/events/${eventId}`, {}, organizerLogin.body.token);
+    assert.strictEqual(cancelled.status, 200);
+    assert.strictEqual(db.prepare('SELECT status FROM events WHERE id = ?').get(eventId).status, 'cancelled');
+
+    const hardDeleted = await request('DELETE', `/api/events/${eventId}?hard=true`, {}, adminLogin.body.token);
+    assert.strictEqual(hardDeleted.status, 200);
+    assert.strictEqual(db.prepare('SELECT id FROM events WHERE id = ?').get(eventId), undefined);
+  } finally {
+    db.prepare('DELETE FROM events WHERE id = ?').run(eventId);
+  }
 });
 
 test('TC-09: Block unauthorized admin access (FR-10, NFR-04)', async () => {
@@ -1213,4 +1361,243 @@ test('FR-10-08: CSV export has correct headers, rows, content type, attachment d
 
   // Clean up formula user
   db.prepare('DELETE FROM users WHERE email = ?').run(formulaEmail);
+});
+
+
+// --- SEC-03: Inbound Payload Validation & Sanitization ---
+
+test('SEC-03-01: Password preservation across validation without mutation or trimming', async () => {
+  const specialPassword = ' P@$$w0rd & "Quotes" <tag> ';
+  const testEmail = `password_preservation_${Date.now()}@example.com`;
+
+  const regRes = await request('POST', '/api/auth/register', {
+    name: 'Password Test User',
+    email: testEmail,
+    password: specialPassword
+  });
+  assert.strictEqual(regRes.status, 201);
+
+  // Attempt login with trimmed password -> must fail because password was NOT trimmed
+  const trimmedLoginRes = await request('POST', '/api/auth/login', {
+    email: testEmail,
+    password: specialPassword.trim()
+  });
+  assert.strictEqual(trimmedLoginRes.status, 401);
+
+  // Attempt login with exact unmodified password -> must succeed
+  const exactLoginRes = await request('POST', '/api/auth/login', {
+    email: testEmail,
+    password: specialPassword
+  });
+  assert.strictEqual(exactLoginRes.status, 200);
+
+  // Clean up
+  db.prepare('DELETE FROM users WHERE email = ?').run(testEmail);
+});
+
+test('SEC-03-02: Public registration strictly rejects admin role assignment (400)', async () => {
+  const adminBeforeCount = db.prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'admin'").get().count;
+
+  const res = await request('POST', '/api/auth/register', {
+    name: 'Escalation Hacker',
+    email: `escalation_${Date.now()}@example.com`,
+    password: 'Password123',
+    role: 'admin'
+  });
+
+  assert.strictEqual(res.status, 400);
+  assert.match(res.body.error, /Administrator accounts cannot be registered publicly/i);
+
+  const adminAfterCount = db.prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'admin'").get().count;
+  assert.strictEqual(adminAfterCount, adminBeforeCount, 'Admin user count must not increase');
+});
+
+test('SEC-03-03: Unicode and legitimate punctuation preservation in event fields', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+
+  const unicodeTitle = "René's AI & ML Workshop — (PES & AT&T)";
+  const unicodeDesc = "Discussing C++, O'Reilly books, café meetups & 日本語 accents.";
+
+  const createRes = await request('POST', '/api/events', {
+    title: unicodeTitle,
+    description: unicodeDesc,
+    category: 'Technology',
+    location: "O'Connell Street, Dublin",
+    date: '2026-12-15',
+    time: '14:30 - 16:30',
+    capacity: 50
+  }, orgLogin.body.token);
+
+  assert.strictEqual(createRes.status, 201);
+  const createdId = createRes.body.event.id;
+
+  const fetchRes = await request('GET', `/api/events/${createdId}`);
+  assert.strictEqual(fetchRes.status, 200);
+  assert.strictEqual(fetchRes.body.event.title, unicodeTitle);
+  assert.strictEqual(fetchRes.body.event.description, unicodeDesc);
+  assert.strictEqual(fetchRes.body.event.location, "O'Connell Street, Dublin");
+
+  // Clean up
+  db.prepare('DELETE FROM events WHERE id = ?').run(createdId);
+});
+
+test('SEC-03-04: XSS script tag stripping and sanitization on announcement updates', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+
+  // Post update with script and iframe tags
+  const xssRes = await request('POST', '/api/events/1/updates', {
+    title: "<script>alert('XSS')</script>Important Announcement",
+    message: "Please note: <iframe src='evil.com'></iframe>Venue changed to Hall A<script src='x.js'></script>."
+  }, orgLogin.body.token);
+
+  assert.strictEqual(xssRes.status, 201);
+  assert.ok(!xssRes.body.update.title.includes('<script>'), 'Title must not contain script tags');
+  assert.ok(!xssRes.body.update.message.includes('<iframe'), 'Message must not contain iframe tags');
+  assert.ok(xssRes.body.update.title.includes('Important Announcement'));
+  assert.ok(xssRes.body.update.message.includes('Venue changed to Hall A.'));
+
+  // Clean up update
+  db.prepare('DELETE FROM event_updates WHERE id = ?').run(xssRes.body.update.id);
+});
+
+test('SEC-03-05: Express rejects malformed JSON payload with HTTP 400', async () => {
+  const malformedPayload = '{"title": "Unclosed JSON string';
+
+  const res = await new Promise((resolve) => {
+    const u = new URL(baseUrl + '/api/events');
+    const req = http.request(u, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(malformedPayload),
+        'Connection': 'close'
+      }
+    }, (response) => {
+      let data = '';
+      response.on('data', chunk => data += chunk);
+      response.on('end', () => {
+        try {
+          resolve({ status: response.statusCode, body: JSON.parse(data) });
+        } catch {
+          resolve({ status: response.statusCode, body: data });
+        }
+      });
+    });
+    req.write(malformedPayload);
+    req.end();
+  });
+
+  assert.strictEqual(res.status, 400);
+  assert.strictEqual(res.body.error, 'Invalid JSON payload.');
+});
+
+test('SEC-03-06: Express rejects unexpected body types (array or primitive) (400)', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+
+  // Send an array instead of JSON object
+  const arrayRes = await request('POST', '/api/events', [1, 2, 3], orgLogin.body.token);
+  assert.strictEqual(arrayRes.status, 400);
+  assert.strictEqual(arrayRes.body.error, 'Request body must be a valid JSON object.');
+});
+
+test('SEC-03-07: Route parameter integer validation on :id endpoints (400)', async () => {
+  const userLogin = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  assert.strictEqual(userLogin.status, 200);
+
+  // String ID
+  const stringIdRes = await request('GET', '/api/events/abc');
+  assert.strictEqual(stringIdRes.status, 400);
+  assert.strictEqual(stringIdRes.body.error, 'Invalid ID parameter.');
+
+  // Negative ID
+  const negativeIdRes = await request('POST', '/api/events/-5/register', {}, userLogin.body.token);
+  assert.strictEqual(negativeIdRes.status, 400);
+  assert.strictEqual(negativeIdRes.body.error, 'Invalid ID parameter.');
+});
+
+test('SEC-03-08: Oversized string payloads rejected (400)', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+
+  // Oversized event title (> 150 chars)
+  const oversizedTitle = 'A'.repeat(200);
+  const res = await request('POST', '/api/events', {
+    title: oversizedTitle,
+    category: 'Technology',
+    location: 'Campus',
+    date: '2026-12-20',
+    time: '10:00 AM',
+    capacity: 100
+  }, orgLogin.body.token);
+
+  assert.strictEqual(res.status, 400);
+  assert.match(res.body.error, /Title must be between 1 and 150 characters/i);
+});
+
+test('SEC-03-09: Complete SEC-05 and existing suite compatibility check', async () => {
+  // Verify that an injection-style string in registration email still cleanly fails validation with 400
+  const malformedEmailRes = await request('POST', '/api/auth/register', {
+    name: 'Validation Compatibility',
+    email: "security' OR '1'='1@example.com",
+    password: 'Password123'
+  });
+  assert.strictEqual(malformedEmailRes.status, 400);
+});
+
+test('SEC-03-10: SVG, image-based XSS vectors, and dangerous URI schemes are sanitized', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+  const orgToken = orgLogin.body.token;
+
+  // Payload containing SVG with onload, img with onerror, and javascript: URI
+  const res = await request('POST', '/api/events', {
+    title: 'Clean SVG Workshop <svg onload=alert(1)>',
+    category: 'Technology',
+    description: 'Safe content with <img src="x" onerror="alert(2)"> and <a href="javascript:alert(3)">link</a> with legitimate café & "quotes" 🎉',
+    location: 'Auditorium 1',
+    date: '2026-12-25',
+    time: '02:00 PM',
+    capacity: 50
+  }, orgToken);
+
+  assert.strictEqual(res.status, 201);
+  const createdEvent = res.body.event;
+
+  // SVG markup stripped
+  assert.doesNotMatch(createdEvent.title, /<svg/i);
+  assert.doesNotMatch(createdEvent.title, /onload/i);
+  assert.strictEqual(createdEvent.title, 'Clean SVG Workshop');
+
+  // img onerror and javascript: stripped
+  assert.doesNotMatch(createdEvent.description, /onerror/i);
+  assert.doesNotMatch(createdEvent.description, /javascript:/i);
+
+  // Legitimate accents, quotes, and emojis preserved
+  assert.match(createdEvent.description, /café/);
+  assert.match(createdEvent.description, /"quotes"/);
+  assert.match(createdEvent.description, /🎉/);
+
+  // Cleanup created event
+  db.prepare('DELETE FROM events WHERE id = ?').run(createdEvent.id);
 });

@@ -172,7 +172,13 @@ Event-Management-System-TEAM-E7/
 |   `-- Part 1 Word documents (listed in Documentation above)
 |-- JIRA/
 |-- server/
+|   |-- controllers/
+|   |   `-- eventController.js
+|   |-- models/
+|   |   `-- eventModel.js
 |   |-- routes/
+|   |-- services/
+|   |   `-- eventService.js
 |   |-- tests/
 |   |   `-- api.test.js
 |   |-- db.js

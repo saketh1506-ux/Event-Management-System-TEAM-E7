@@ -73,6 +73,6 @@ The requirements from the formal Software Requirements Specification (SRS), Soft
 | **NFR-07** | Modular client-server components | System Arch | TC-14 | Issue #14 ([NFR-07]) | Epic 6 |
 | **SEC-01** | Secure password hashing (bcrypt) | UC-04, UC-05 | TC-11 | Issue #3 ([SEC-01]) | Epic 1 |
 | **SEC-02** | Role-based access control (RBAC) | UC-05, Protected UCs | TC-02, TC-09 | Issue #4 ([SEC-02]) | Epic 1 |
-| **SEC-03** | Inbound payload validation/sanitization | All API mutations | TC-16 | Issue #15 ([SEC-03]) | Epic 6 |
+| **SEC-03** | Inbound payload validation/sanitization | All API mutations | TC-16 | Issue #37 ([SEC-03]) | Epic 6 |
 | **SEC-04** | Secure session handling & token expiry | UC-05, Protected UCs | TC-02, TC-16 | Issue #5 ([SEC-04]) | Epic 1 |
 | **SEC-05** | Admin access & privilege restriction | UC-17, UC-18, UC-19 | TC-09, TC-18 | Issue #21 ([SEC-05]) | Epic 5 |
