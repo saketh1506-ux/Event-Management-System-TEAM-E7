@@ -101,13 +101,13 @@ function deleteEvent(eventId, query, user) {
 }
 
 function registerForEvent(eventId, userId) {
-  const event = eventModel.findById(eventId);
-  if (!event) throw createError(404, 'Event not found.');
-  if (event.status === 'cancelled') {
-    throw createError(400, 'Cannot register for a cancelled event.');
-  }
-
   const { spotsLeft } = eventModel.withImmediateTransaction(() => {
+    const event = eventModel.findById(eventId);
+    if (!event) throw createError(404, 'Event not found.');
+    if (event.status === 'cancelled') {
+      throw createError(400, 'Cannot register for a cancelled event.');
+    }
+
     const existingRegistration = eventModel.findRegistration(eventId, userId);
     if (existingRegistration && existingRegistration.status === 'confirmed') {
       throw createError(409, 'You are already registered for this event.');

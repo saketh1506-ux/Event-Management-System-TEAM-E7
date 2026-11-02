@@ -372,6 +372,123 @@ test('TC-05A: Concurrent registrations cannot exceed capacity (FR-04)', async ()
   assert.strictEqual(detailRes.body.event.spots_left, 0);
 });
 
+test('NFR-06: Registration database failure rolls back without creating state (transaction consistency)', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+
+  const createRes = await request('POST', '/api/events', {
+    title: `Registration Rollback ${Date.now()}`,
+    description: 'Testing registration transaction rollback',
+    category: 'Workshop',
+    location: 'Online',
+    date: '2026-12-08',
+    time: '02:00 PM',
+    capacity: 5
+  }, orgLogin.body.token);
+  assert.strictEqual(createRes.status, 201);
+  const eventId = createRes.body.event.id;
+
+  const userLogin = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  assert.strictEqual(userLogin.status, 200);
+  const userId = userLogin.body.user.id;
+  const failureTriggerName = `fail_registration_${Date.now()}`;
+
+  try {
+    db.exec(`
+      CREATE TRIGGER ${failureTriggerName}
+      BEFORE INSERT ON registrations
+      WHEN NEW.event_id = ${eventId}
+      BEGIN
+        SELECT RAISE(ABORT, 'forced registration failure');
+      END;
+    `);
+
+    const failedRegistration = await request(
+      'POST',
+      `/api/events/${eventId}/register`,
+      {},
+      userLogin.body.token
+    );
+    assert.strictEqual(failedRegistration.status, 500);
+  } finally {
+    db.prepare(`DROP TRIGGER IF EXISTS ${failureTriggerName}`).run();
+  }
+
+  const registrationRows = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM registrations
+    WHERE event_id = ? AND user_id = ?
+  `).get(eventId, userId);
+  assert.strictEqual(registrationRows.count, 0);
+
+  const detailRes = await request('GET', `/api/events/${eventId}`);
+  assert.strictEqual(detailRes.status, 200);
+  assert.strictEqual(detailRes.body.event.registered_count, 0);
+});
+
+test('NFR-06: Concurrent cancellation and registration leave one consistent row (transaction consistency)', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+
+  const createRes = await request('POST', '/api/events', {
+    title: `Registration Cancellation Race ${Date.now()}`,
+    description: 'Testing cancellation during registration activity',
+    category: 'Workshop',
+    location: 'Online',
+    date: '2026-12-09',
+    time: '03:00 PM',
+    capacity: 1
+  }, orgLogin.body.token);
+  assert.strictEqual(createRes.status, 201);
+  const eventId = createRes.body.event.id;
+
+  const userLogin = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  assert.strictEqual(userLogin.status, 200);
+  const token = userLogin.body.token;
+  const userId = userLogin.body.user.id;
+
+  const initialRegistration = await request('POST', `/api/events/${eventId}/register`, {}, token);
+  assert.strictEqual(initialRegistration.status, 201);
+
+  const responses = await Promise.all([
+    request('POST', `/api/events/${eventId}/register`, {}, token),
+    request('DELETE', `/api/events/${eventId}/register`, {}, token)
+  ]);
+  assert.ok(responses.every(response => [200, 201, 409].includes(response.status)));
+  assert.ok(responses.some(response => response.status === 200));
+
+  const rows = db.prepare(`
+    SELECT status
+    FROM registrations
+    WHERE event_id = ? AND user_id = ?
+  `).all(eventId, userId);
+  assert.strictEqual(rows.length, 1);
+  assert.ok(['confirmed', 'cancelled'].includes(rows[0].status));
+
+  const confirmedCount = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM registrations
+    WHERE event_id = ? AND status = 'confirmed'
+  `).get(eventId).count;
+  assert.ok(confirmedCount <= 1);
+
+  const detailRes = await request('GET', `/api/events/${eventId}`);
+  assert.strictEqual(detailRes.status, 200);
+  assert.strictEqual(detailRes.body.event.registered_count, confirmedCount);
+});
+
 test('TC-07A: Re-register after cancellation (FR-05)', async () => {
   const orgLogin = await request('POST', '/api/auth/login', {
     email: 'organizer@ems.com',

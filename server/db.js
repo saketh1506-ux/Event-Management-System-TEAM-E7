@@ -58,6 +58,12 @@ function initDb() {
     );
   `);
 
+  // Registration counts and capacity checks filter confirmed rows by event.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_registrations_event_status
+    ON registrations(event_id, status);
+  `);
+
   // Event Updates / Notifications table
   db.exec(`
     CREATE TABLE IF NOT EXISTS event_updates (
