@@ -4,6 +4,11 @@ process.env.EMS_DATABASE_PATH = require('node:path').join(
   require('node:os').tmpdir(),
   `ems-api-test-${process.pid}-${Date.now()}.sqlite`
 );
+process.env.EMS_SEED_ADMIN_PASSWORD = 'Admin@123';
+process.env.EMS_SEED_ORGANIZER_PASSWORD = 'Org@123';
+process.env.EMS_SEED_SECOND_ORGANIZER_PASSWORD = 'Org@123';
+process.env.EMS_SEED_ATTENDEE_PASSWORD = 'User@123';
+process.env.EMS_SEED_SECOND_ATTENDEE_PASSWORD = 'User@123';
 
 const fs = require('node:fs');
 const os = require('node:os');
@@ -179,6 +184,65 @@ test('TC-03: Search and view an event (FR-02, FR-03)', async () => {
   assert.strictEqual(detailRes.status, 200);
   assert.strictEqual(detailRes.body.event.id, eventId);
   assert.ok(detailRes.body.event.capacity >= 1);
+});
+
+test('FR-02: Event listing preserves search, category, date, status, organizer, and capacity fields', async () => {
+  const organizer = db.prepare('SELECT id FROM users WHERE email = ?').get('organizer@ems.com');
+  const attendee = db.prepare('SELECT id FROM users WHERE email = ?').get('likhith@ems.com');
+  const suffix = Date.now();
+  const insertEvent = db.prepare(`
+    INSERT INTO events (title, description, category, location, date, time, capacity, organizer_id, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const activeId = insertEvent.run(
+    `Layered Search ${suffix} A`, 'Layered filter description', 'Technology', `Layered Hall ${suffix}`,
+    '2026-12-30', '09:00 AM', 2, organizer.id, 'active'
+  ).lastInsertRowid;
+  const cancelledId = insertEvent.run(
+    `Layered Search ${suffix} B`, 'Cancelled filter description', 'Workshop', `Other Hall ${suffix}`,
+    '2026-12-31', '10:00 AM', 1, organizer.id, 'cancelled'
+  ).lastInsertRowid;
+  const descriptionId = insertEvent.run(
+    `Other Listing ${suffix}`, `Layered Search ${suffix} in description`, 'Workshop', `Final Hall ${suffix}`,
+    '2026-12-31', '11:00 AM', 3, organizer.id, 'active'
+  ).lastInsertRowid;
+
+  db.prepare("INSERT INTO registrations (event_id, user_id, status) VALUES (?, ?, 'confirmed')")
+    .run(activeId, attendee.id);
+  db.prepare("INSERT INTO registrations (event_id, user_id, status) VALUES (?, ?, 'confirmed')")
+    .run(cancelledId, attendee.id);
+
+  try {
+    const listing = await request('GET', `/api/events/?search=${encodeURIComponent(`Layered Search ${suffix}`)}`);
+    assert.strictEqual(listing.status, 200);
+    assert.deepStrictEqual(listing.body.events.map(event => event.id), [activeId, cancelledId, descriptionId]);
+
+    const active = listing.body.events.find(event => event.id === activeId);
+    assert.strictEqual(active.organizer_name, 'Saketh Narayanam');
+    assert.strictEqual(active.organizer_email, 'organizer@ems.com');
+    assert.strictEqual(active.registered_count, 1);
+    assert.strictEqual(active.spots_left, 1);
+    assert.strictEqual(active.is_full, false);
+
+    const cancelled = listing.body.events.find(event => event.id === cancelledId);
+    assert.strictEqual(cancelled.registered_count, 1);
+    assert.strictEqual(cancelled.spots_left, 0);
+    assert.strictEqual(cancelled.is_full, true);
+
+    const category = await request('GET', `/api/events?category=Technology&search=${encodeURIComponent(`Layered Search ${suffix}`)}`);
+    assert.deepStrictEqual(category.body.events.map(event => event.id), [activeId]);
+
+    const date = await request('GET', `/api/events?date=2026-12-31&search=${encodeURIComponent(`Layered Search ${suffix}`)}`);
+    assert.deepStrictEqual(date.body.events.map(event => event.id), [cancelledId, descriptionId]);
+
+    const status = await request('GET', `/api/events?status=cancelled&search=${encodeURIComponent(`Layered Search ${suffix}`)}`);
+    assert.deepStrictEqual(status.body.events.map(event => event.id), [cancelledId]);
+
+    const deleted = await request('GET', `/api/events?status=deleted&search=${encodeURIComponent(`Layered Search ${suffix}`)}`);
+    assert.deepStrictEqual(deleted.body.events, []);
+  } finally {
+    db.prepare('DELETE FROM events WHERE id IN (?, ?, ?)').run(activeId, cancelledId, descriptionId);
+  }
 });
 
 test('TC-04, TC-06, TC-07: Register, Prevent Duplicate, and Cancel registration (FR-04, FR-05)', async () => {
@@ -567,6 +631,90 @@ test('TC-08: Organizer creates event and sets capacity (FR-07, FR-08)', async ()
   assert.strictEqual(res.status, 201);
   assert.strictEqual(res.body.event.capacity, 75);
   assert.strictEqual(res.body.event.title, eventData.title);
+});
+
+test('FR-07/FR-08: Event updates, capacity limits, participant access, and deletion preserve ownership rules', async () => {
+  const organizerLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  const otherOrganizerLogin = await request('POST', '/api/auth/login', {
+    email: 'neeraj@ems.com',
+    password: 'Org@123'
+  });
+  const attendeeLogin = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  const secondAttendeeLogin = await request('POST', '/api/auth/login', {
+    email: 'adil@ems.com',
+    password: 'User@123'
+  });
+  const adminLogin = await request('POST', '/api/auth/login', {
+    email: 'admin@ems.com',
+    password: 'Admin@123'
+  });
+  assert.strictEqual(organizerLogin.status, 200);
+  assert.strictEqual(otherOrganizerLogin.status, 200);
+  assert.strictEqual(attendeeLogin.status, 200);
+  assert.strictEqual(secondAttendeeLogin.status, 200);
+  assert.strictEqual(adminLogin.status, 200);
+
+  const created = await request('POST', '/api/events', {
+    title: `Layered Lifecycle ${Date.now()}`,
+    description: 'Testing event lifecycle behavior',
+    category: 'Workshop',
+    location: 'Lifecycle Hall',
+    date: '2026-12-27',
+    time: '10:00 AM',
+    capacity: 2
+  }, organizerLogin.body.token);
+  assert.strictEqual(created.status, 201);
+  const eventId = created.body.event.id;
+
+  try {
+    const otherOrganizerUpdate = await request('PUT', `/api/events/${eventId}`, { title: 'Unauthorized edit' }, otherOrganizerLogin.body.token);
+    assert.strictEqual(otherOrganizerUpdate.status, 403);
+
+    assert.strictEqual((await request('POST', `/api/events/${eventId}/register`, {}, attendeeLogin.body.token)).status, 201);
+    assert.strictEqual((await request('POST', `/api/events/${eventId}/register`, {}, secondAttendeeLogin.body.token)).status, 201);
+
+    const capacityReduction = await request('PUT', `/api/events/${eventId}`, { capacity: 1 }, organizerLogin.body.token);
+    assert.strictEqual(capacityReduction.status, 400);
+    assert.match(capacityReduction.body.error, /current confirmed registrations are 2/i);
+
+    const updated = await request('PUT', `/api/events/${eventId}`, {
+      title: 'Updated Layered Lifecycle',
+      capacity: 3
+    }, organizerLogin.body.token);
+    assert.strictEqual(updated.status, 200);
+    assert.strictEqual(updated.body.event.title, 'Updated Layered Lifecycle');
+    assert.strictEqual(updated.body.event.capacity, 3);
+
+    const participants = await request('GET', `/api/events/${eventId}/participants`, null, organizerLogin.body.token);
+    assert.strictEqual(participants.status, 200);
+    assert.strictEqual(participants.body.confirmed_count, 2);
+    assert.strictEqual(participants.body.cancelled_count, 0);
+    assert.strictEqual(participants.body.participants.length, 2);
+
+    const otherOrganizerParticipants = await request('GET', `/api/events/${eventId}/participants`, null, otherOrganizerLogin.body.token);
+    assert.strictEqual(otherOrganizerParticipants.status, 403);
+    const attendeeParticipants = await request('GET', `/api/events/${eventId}/participants`, null, attendeeLogin.body.token);
+    assert.strictEqual(attendeeParticipants.status, 403);
+
+    const otherOrganizerDelete = await request('DELETE', `/api/events/${eventId}`, {}, otherOrganizerLogin.body.token);
+    assert.strictEqual(otherOrganizerDelete.status, 403);
+
+    const cancelled = await request('DELETE', `/api/events/${eventId}`, {}, organizerLogin.body.token);
+    assert.strictEqual(cancelled.status, 200);
+    assert.strictEqual(db.prepare('SELECT status FROM events WHERE id = ?').get(eventId).status, 'cancelled');
+
+    const hardDeleted = await request('DELETE', `/api/events/${eventId}?hard=true`, {}, adminLogin.body.token);
+    assert.strictEqual(hardDeleted.status, 200);
+    assert.strictEqual(db.prepare('SELECT id FROM events WHERE id = ?').get(eventId), undefined);
+  } finally {
+    db.prepare('DELETE FROM events WHERE id = ?').run(eventId);
+  }
 });
 
 test('TC-09: Block unauthorized admin access (FR-10, NFR-04)', async () => {

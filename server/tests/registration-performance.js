@@ -160,7 +160,12 @@ async function main() {
         ...process.env,
         NODE_ENV: 'production',
         PORT: String(port),
-        EMS_DATABASE_PATH: databasePath
+        EMS_DATABASE_PATH: databasePath,
+        EMS_SEED_ADMIN_PASSWORD: 'Admin@123',
+        EMS_SEED_ORGANIZER_PASSWORD: 'Org@123',
+        EMS_SEED_SECOND_ORGANIZER_PASSWORD: 'Org@123',
+        EMS_SEED_ATTENDEE_PASSWORD: 'User@123',
+        EMS_SEED_SECOND_ATTENDEE_PASSWORD: 'User@123'
       },
       stdio: ['ignore', 'pipe', 'pipe']
     });
