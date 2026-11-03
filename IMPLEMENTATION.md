@@ -179,9 +179,10 @@ The workflow:
 
 - Runs on pushes to `main`.
 - Runs on pull requests targeting `main`.
-- Sets up Node.js 22.
-- Installs backend dependencies using `npm ci`.
-- Executes `node --test ./tests/api.test.js`.
+- Sets up Node.js 22 LTS.
+- Installs backend dependencies using `npm ci`; `better-sqlite3` uses its native Linux binding on the Ubuntu runner.
+- Checks the syntax of tracked JavaScript files.
+- Runs the existing backend test suite with `npm test`.
 
 The workflow was merged into `main` through pull request **#57**, and the GitHub Actions check passed.
 
