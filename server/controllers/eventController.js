@@ -34,7 +34,7 @@ function getEventDetails(req, res) {
 
 function createEvent(req, res) {
   try {
-    const event = eventService.createEvent(req.body, req.user);
+    const event = eventService.createEvent(req.body, req.user.id);
     return res.status(201).json({ message: 'Event created successfully.', event });
   } catch (error) {
     return sendFailure(res, error, 'Create event error', 'Failed to create event.');

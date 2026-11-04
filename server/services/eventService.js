@@ -40,7 +40,7 @@ function getEventDetails(eventId, user) {
   };
 }
 
-function createEvent(data, user) {
+function createEvent(data, userId) {
   const { title, description, category, location, date, time, capacity } = data;
   if (!title || !location || !date || !time || !capacity) {
     throw createError(400, 'Title, location, date, time, and capacity are required.');
@@ -51,7 +51,7 @@ function createEvent(data, user) {
     throw createError(400, 'Capacity must be a positive integer greater than or equal to 1.');
   }
 
-  const create = () => eventModel.createEvent({
+  return eventModel.createEvent({
     title: title.trim(),
     description: description ? description.trim() : '',
     category: category || 'General',
@@ -59,17 +59,7 @@ function createEvent(data, user) {
     date,
     time,
     capacity: Number(capacityText),
-    organizerId: user.id
-  });
-
-  if (user.role !== 'admin') return create();
-
-  return eventModel.withImmediateTransaction(() => {
-    const event = create();
-    logAdminAction(user.id, 'event.created', 'event', event.id, {
-      title: event.title
-    });
-    return event;
+    organizerId: userId
   });
 }
 
@@ -206,18 +196,7 @@ function sendUpdate(eventId, data, user) {
   const event = eventModel.findById(eventId);
   if (!event) throw createError(404, 'Event not found.');
   assertEventOwner(event, user, 'send updates for');
-
-  const create = () => eventModel.createUpdate(eventId, title.trim(), message.trim());
-  if (user.role !== 'admin') return create();
-
-  return eventModel.withImmediateTransaction(() => {
-    const update = create();
-    logAdminAction(user.id, 'event.update.sent', 'event', eventId, {
-      updateId: update.id,
-      title: update.title
-    });
-    return update;
-  });
+  return eventModel.createUpdate(eventId, title.trim(), message.trim());
 }
 
 function getReport(eventId, user) {
