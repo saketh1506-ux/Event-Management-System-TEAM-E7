@@ -39,6 +39,16 @@ class App {
         localStorage.removeItem('user');
         this.updateAuthUI();
         this.toast('Session expired or invalidated. Please sign in again.', 'info');
+      } else if (res.ok) {
+        const data = await res.json();
+        if (data.user) {
+          this.currentUser = data.user;
+          localStorage.setItem('user', JSON.stringify(this.currentUser));
+          this.updateAuthUI();
+          if (this.currentUser.role !== 'admin' && document.getElementById('view-admin').style.display !== 'none') {
+            this.navigate('home');
+          }
+        }
       }
     } catch (err) {
       // Network failure, skip
@@ -160,6 +170,11 @@ class App {
 
   // --- Views & Routing ---
   navigate(viewName) {
+    if (viewName === 'admin' && (!this.token || !this.currentUser || this.currentUser.role !== 'admin')) {
+      this.toast(this.token ? 'Administrator access is required.' : 'Please log in to access the admin console.', 'error');
+      return;
+    }
+
     ['home', 'my-events', 'organizer', 'admin'].forEach(v => {
       const el = document.getElementById(`view-${v}`);
       if (el) el.style.display = (v === viewName) ? 'block' : 'none';
@@ -825,9 +840,20 @@ class App {
         fetch(`${API_BASE}/admin/reports`, { headers: { 'Authorization': `Bearer ${this.token}` } })
       ]);
 
-      const overview = await overviewRes.json();
-      const usersData = await usersRes.json();
-      const reportsData = await reportsRes.json();
+      const responses = [overviewRes, usersRes, reportsRes];
+      const [overview, usersData, reportsData] = await Promise.all(
+        responses.map(response => response.json())
+      );
+      const failedIndex = responses.findIndex(response => !response.ok);
+      if (failedIndex !== -1) {
+        const response = responses[failedIndex];
+        const data = [overview, usersData, reportsData][failedIndex];
+        if (response.status === 401 || response.status === 403) {
+          await this.verifySession();
+          this.navigate('home');
+        }
+        throw new Error(data.error || 'Failed to load admin data.');
+      }
 
       // Set stats
       document.getElementById('stat-total-users').innerText = overview.totalUsers;

@@ -1245,6 +1245,13 @@ test('SEC-05: Admin authorization uses current account role and status, and reco
     assert.strictEqual((await request('GET', '/api/admin/overview')).status, 401);
     assert.strictEqual((await request('GET', '/api/admin/overview', null, registration.body.token)).status, 403);
     assert.strictEqual((await request('GET', '/api/admin/overview', null, organizerLogin.body.token)).status, 403);
+    assert.strictEqual((await request('GET', '/api/admin/events')).status, 401);
+    assert.strictEqual((await request('PATCH', `/api/admin/users/${userId}/role`, {
+      role: 'admin'
+    })).status, 401);
+
+    const forgedAdminToken = jwt.sign({ id: userId, role: 'admin' }, JWT_SECRET, { expiresIn: '1h' });
+    assert.strictEqual((await request('GET', '/api/admin/overview', null, forgedAdminToken)).status, 403);
 
     const users = await request('GET', '/api/admin/users', null, adminLogin.body.token);
     assert.strictEqual(users.status, 200);
@@ -1307,11 +1314,29 @@ test('FR-11: Admin can remove events from the public catalog and the action is a
   }, organizerLogin.body.token);
   assert.strictEqual(created.status, 201);
   const eventId = created.body.event.id;
+  const adminCreated = await request('POST', '/api/events', {
+    title: `Admin Created Moderation ${Date.now()}`,
+    description: 'Event created through an administrator-authorized endpoint.',
+    category: 'Workshop',
+    location: 'Moderation Hall',
+    date: '2026-12-19',
+    time: '10:00 AM',
+    capacity: 20
+  }, adminLogin.body.token);
+  assert.strictEqual(adminCreated.status, 201);
+  const adminCreatedEventId = adminCreated.body.event.id;
 
   try {
     const adminEvents = await request('GET', '/api/admin/events', null, adminLogin.body.token);
     assert.strictEqual(adminEvents.status, 200);
     assert.ok(adminEvents.body.events.some(event => event.id === eventId));
+    assert.ok(adminEvents.body.events.some(event => event.id === adminCreatedEventId));
+
+    const adminUpdate = await request('POST', `/api/events/${adminCreatedEventId}/updates`, {
+      title: 'Moderation notice',
+      message: 'Administrative review is complete.'
+    }, adminLogin.body.token);
+    assert.strictEqual(adminUpdate.status, 201);
 
     const removed = await request('DELETE', `/api/events/${eventId}?hard=true`, {}, adminLogin.body.token);
     assert.strictEqual(removed.status, 200);
@@ -1329,8 +1354,15 @@ test('FR-11: Admin can remove events from the public catalog and the action is a
     `).get(eventId);
     assert.strictEqual(auditEntry.action, 'event.deleted');
     assert.strictEqual(JSON.parse(auditEntry.details).title, title);
+
+    const adminActions = db.prepare(`
+      SELECT action FROM admin_audit_log
+      WHERE target_type = 'event' AND target_id = ?
+      ORDER BY id
+    `).all(adminCreatedEventId).map(row => row.action);
+    assert.deepStrictEqual(adminActions, ['event.created', 'event.update.sent']);
   } finally {
-    db.prepare('DELETE FROM events WHERE id = ?').run(eventId);
+    db.prepare('DELETE FROM events WHERE id IN (?, ?)').run(eventId, adminCreatedEventId);
   }
 });
 
