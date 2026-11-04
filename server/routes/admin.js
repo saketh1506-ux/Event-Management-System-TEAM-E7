@@ -3,7 +3,6 @@ const router = express.Router();
 const db = require('../db');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 const { validatePayload, validateParams, adminSchemas } = require('../middleware/validate');
-const { logAdminAction } = require('../services/adminAuditService');
 
 // All admin routes require authenticated admin
 router.use(authenticateToken, authorizeRoles('admin'));
@@ -51,27 +50,14 @@ router.patch('/users/:id/role', validateParams('id'), validatePayload(adminSchem
   const userId = req.params.id;
   const { role } = req.body;
 
-  if (Number(userId) === req.user.id && role !== 'admin') {
-    return res.status(400).json({ error: 'Admin cannot remove their own administrator role.' });
+  if (!['user', 'organizer', 'admin'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role specified.' });
   }
 
   try {
-    const updated = db.transaction(() => {
-      const target = db.prepare('SELECT role FROM users WHERE id = ?').get(userId);
-      if (!target) return false;
-
-      db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId);
-      logAdminAction(req.user.id, 'user.role.updated', 'user', userId, {
-        from: target.role,
-        to: role
-      });
-      return true;
-    })();
-
-    if (!updated) return res.status(404).json({ error: 'User not found.' });
+    db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId);
     return res.status(200).json({ message: 'User role updated successfully.' });
   } catch (err) {
-    console.error('Admin user role update error:', err);
     return res.status(500).json({ error: 'Failed to update user role.' });
   }
 });
@@ -86,27 +72,14 @@ router.patch('/users/:id/status', validateParams('id'), validatePayload(adminSch
   }
 
   // Prevent self-suspension
-  if (Number(userId) === req.user.id && status === 'suspended') {
+  if (parseInt(userId, 10) === req.user.id) {
     return res.status(400).json({ error: 'Admin cannot suspend their own account.' });
   }
 
   try {
-    const updated = db.transaction(() => {
-      const target = db.prepare('SELECT status FROM users WHERE id = ?').get(userId);
-      if (!target) return false;
-
-      db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, userId);
-      logAdminAction(req.user.id, 'user.status.updated', 'user', userId, {
-        from: target.status,
-        to: status
-      });
-      return true;
-    })();
-
-    if (!updated) return res.status(404).json({ error: 'User not found.' });
+    db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, userId);
     return res.status(200).json({ message: `User status changed to ${status}.` });
   } catch (err) {
-    console.error('Admin user status update error:', err);
     return res.status(500).json({ error: 'Failed to update user status.' });
   }
 });

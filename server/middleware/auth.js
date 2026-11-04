@@ -13,19 +13,14 @@ function hashToken(token) {
 }
 
 function isTokenRevoked(token) {
-  const tokenHash = hashToken(token);
-  const row = db.prepare('SELECT token_hash FROM revoked_tokens WHERE token_hash = ?').get(tokenHash);
-  return !!row;
-}
-
-function getActiveUser(userId) {
-  const user = db.prepare(`
-    SELECT id, name, email, role, status
-    FROM users
-    WHERE id = ?
-  `).get(userId);
-
-  return user && user.status === 'active' ? user : null;
+  try {
+    const tokenHash = hashToken(token);
+    const row = db.prepare('SELECT token_hash FROM revoked_tokens WHERE token_hash = ?').get(tokenHash);
+    return !!row;
+  } catch (err) {
+    console.error('Error checking revoked token:', err);
+    return false;
+  }
 }
 
 function revokeToken(token, userId = null, expiresAt = null) {
@@ -48,31 +43,18 @@ function authenticateToken(req, res, next) {
     return res.status(401).json({ error: 'Access token required. Please log in.' });
   }
 
-  try {
-    if (isTokenRevoked(token)) {
-      return res.status(401).json({ error: 'Token has been revoked. Please log in again.' });
-    }
-  } catch (err) {
-    return next(err);
+  // Check if token has been revoked in database (SEC-04)
+  if (isTokenRevoked(token)) {
+    return res.status(401).json({ error: 'Token has been revoked. Please log in again.' });
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
       return res.status(401).json({ error: 'Invalid or expired token.' });
     }
-
-    try {
-      const currentUser = getActiveUser(user.id);
-      if (!currentUser) {
-        return res.status(401).json({ error: 'Account is unavailable. Please log in again.' });
-      }
-
-      req.user = { ...user, ...currentUser };
-      req.token = token;
-      return next();
-    } catch (error) {
-      return next(error);
-    }
+    req.user = user;
+    req.token = token;
+    next();
   });
 }
 
@@ -85,28 +67,19 @@ function optionalAuthenticate(req, res, next) {
     return next();
   }
 
-  try {
-    if (isTokenRevoked(token)) {
-      req.user = null;
-      return next();
-    }
-  } catch (err) {
-    return next(err);
+  if (isTokenRevoked(token)) {
+    req.user = null;
+    return next();
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (!err && user) {
-      try {
-        const currentUser = getActiveUser(user.id);
-        req.user = currentUser ? { ...user, ...currentUser } : null;
-        if (req.user) req.token = token;
-      } catch (error) {
-        return next(error);
-      }
+      req.user = user;
+      req.token = token;
     } else {
       req.user = null;
     }
-    return next();
+    next();
   });
 }
 
