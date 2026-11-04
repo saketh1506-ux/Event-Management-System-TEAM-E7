@@ -29,8 +29,10 @@ The system is a web-based application that supports event discovery, registratio
 | **FR-08** | Organizer Participant Roster and Capacity Tracking | `server/services/eventService.js`, `server/models/eventModel.js` (`GET /api/events/:id/participants`) | Implemented |
 | **FR-09** | Organizer Broadcast Updates and Notifications | `server/services/eventService.js`, `server/models/eventModel.js` (`POST /api/events/:id/updates`) | Implemented |
 | **FR-10** | Administration: User Roles, Event Moderation, and Reports | `server/routes/admin.js`, `client/js/app.js` | Implemented |
+| **FR-11** | Admin Moderation of Users, Organizers, and Events | `server/routes/admin.js`, `server/services/eventService.js`, `client/js/app.js` | User suspension and role changes; administrator event removal |
+| **SEC-05** | Admin Route Protection and Privilege Guard | `server/middleware/auth.js`, `server/routes/admin.js` | Admin endpoints check current active account role; administrative mutations are recorded in the audit log |
 | **NFR-03** | Passwords Not Stored as Plain Text | `server/db.js`, `server/routes/auth.js` | Bcrypt password hashing; verified by an automated test |
-| **NFR-04** | Role-Based Authorization | `server/middleware/auth.js` | Role-based access controls; authorization tests pass |
+| **NFR-04** | Role-Based Authorization | `server/middleware/auth.js` | Role checks use the active account state in the database; authorization tests pass |
 
 ---
 
@@ -55,7 +57,8 @@ Event-Management-System-TEAM-E7/
 │   │   └── eventModel.js       # Event-related database queries
 │   ├── server.js               # Express application and static file server
 │   ├── services/
-│   │   └── eventService.js     # Event rules, authorization, and calculations
+│   │   ├── eventService.js     # Event rules, authorization, and calculations
+│   │   └── adminAuditService.js # Persistent administrative action logging
 │   ├── .env.example            # Environment configuration template
 │   ├── middleware/
 │   │   └── auth.js             # JWT authentication and role authorization
@@ -161,9 +164,13 @@ The suite covers:
 - Password hashing
 - SQL injection and malformed-input rejection
 - Administrator role changes and non-administrator access denial
+- Current-role and suspended-account enforcement for existing tokens
+- Administrative user and event moderation audit records
 - Database integrity after failed validation and authorization requests
 
-The recorded test run completed successfully. Results apply to the automated cases in this suite and do not establish that every planned test case or non-functional requirement has been verified.
+The historical test run completed successfully. Results apply to the automated cases in that run and do not establish that every planned test case or non-functional requirement has been verified.
+
+The current automated API suite contains 51 tests and passes locally. Administrative role, status, and event mutations are stored in the SQLite `admin_audit_log` table, with each audit record written in the same transaction as its mutation.
 
 ---
 

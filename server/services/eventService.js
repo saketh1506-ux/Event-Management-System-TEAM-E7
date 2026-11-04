@@ -1,4 +1,5 @@
 const eventModel = require('../models/eventModel');
+const { logAdminAction } = require('./adminAuditService');
 
 function createError(status, message) {
   const error = new Error(message);
@@ -73,7 +74,7 @@ function updateEvent(eventId, data, user) {
     throw createError(400, `Cannot decrease capacity to ${newCapacity}. Current confirmed registrations are ${currentRegistrationCount}.`);
   }
 
-  return eventModel.updateEvent(eventId, {
+  const updated = () => eventModel.updateEvent(eventId, {
     title: data.title ? data.title.trim() : null,
     description: data.description !== undefined ? data.description.trim() : null,
     category: data.category || null,
@@ -83,21 +84,48 @@ function updateEvent(eventId, data, user) {
     capacity: newCapacity || null,
     status: data.status || null
   });
+
+  if (user.role !== 'admin') return updated();
+
+  return eventModel.withImmediateTransaction(() => {
+    const event = updated();
+    logAdminAction(user.id, 'event.updated', 'event', eventId, {
+      changedFields: Object.keys(data)
+    });
+    return event;
+  });
 }
 
 function deleteEvent(eventId, query, user) {
-  const existing = eventModel.findById(eventId);
-  if (!existing) throw createError(404, 'Event not found.');
-  assertEventOwner(existing, user, 'cancel');
+  const deleteOrCancel = () => {
+    const existing = eventModel.findById(eventId);
+    if (!existing) throw createError(404, 'Event not found.');
+    assertEventOwner(existing, user, 'cancel');
 
-  const hardDelete = query.hard === 'true' && user.role === 'admin';
-  if (hardDelete) {
-    eventModel.removeEvent(eventId);
-    return 'Event permanently removed by administrator.';
-  }
+    const hardDelete = query.hard === 'true' && user.role === 'admin';
+    if (hardDelete) {
+      eventModel.removeEvent(eventId);
+      logAdminAction(user.id, 'event.deleted', 'event', eventId, {
+        title: existing.title,
+        status: existing.status
+      });
+      return 'Event permanently removed by administrator.';
+    }
 
-  eventModel.cancelEvent(eventId);
-  return 'Event marked as cancelled successfully.';
+    eventModel.cancelEvent(eventId);
+    if (user.role === 'admin') {
+      logAdminAction(user.id, 'event.cancelled', 'event', eventId, {
+        title: existing.title,
+        from: existing.status,
+        to: 'cancelled'
+      });
+    }
+    return 'Event marked as cancelled successfully.';
+  };
+
+  return user.role === 'admin'
+    ? eventModel.withImmediateTransaction(deleteOrCancel)
+    : deleteOrCancel();
 }
 
 function registerForEvent(eventId, userId) {
