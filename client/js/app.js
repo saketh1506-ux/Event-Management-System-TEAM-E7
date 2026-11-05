@@ -763,13 +763,6 @@ class App {
   }
 
   async viewEventDetails(eventId) {
-    const title = document.getElementById('modal-event-title');
-    const body = document.getElementById('modal-event-body');
-    title.textContent = 'Loading event details...';
-    body.setAttribute('aria-busy', 'true');
-    body.innerHTML = '<p role="status" aria-live="polite">Loading event details...</p>';
-    this.showModal('details-modal');
-
     try {
       const headers = {};
       if (this.token) {
@@ -780,8 +773,8 @@ class App {
       if (!res.ok) throw new Error(data.error);
 
       const evt = data.event;
-      title.textContent = evt.title;
-      body.removeAttribute('aria-busy');
+      document.getElementById('modal-event-title').textContent = evt.title;
+      const body = document.getElementById('modal-event-body');
 
       body.innerHTML = `
         <span class="event-badge">${this.escapeHtml(evt.category)}</span>
@@ -819,17 +812,7 @@ class App {
 
       this.showModal('details-modal');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load event details.';
-      title.textContent = 'Event details unavailable';
-      body.removeAttribute('aria-busy');
-      body.innerHTML = `
-        <div role="alert">
-          <p id="event-details-error-message"></p>
-          <button class="btn-secondary" onclick="app.hideModal('details-modal')">Close</button>
-        </div>
-      `;
-      body.querySelector('#event-details-error-message').textContent = message;
-      this.toast(message, 'error');
+      this.toast(err.message, 'error');
     }
   }
 
