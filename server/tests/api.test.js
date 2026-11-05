@@ -186,6 +186,53 @@ test('TC-03: Search and view an event (FR-02, FR-03)', async () => {
   assert.ok(detailRes.body.event.capacity >= 1);
 });
 
+test('FR-03: Event details include full metadata and remaining capacity; missing events return 404', async () => {
+  const organizer = db.prepare('SELECT id FROM users WHERE email = ?').get('organizer@ems.com');
+  const attendee = db.prepare('SELECT id FROM users WHERE email = ?').get('likhith@ems.com');
+  const eventId = db.prepare(`
+    INSERT INTO events (title, description, category, location, date, time, capacity, organizer_id, status)
+    VALUES (?, ?, 'Workshop', ?, ?, ?, ?, ?, 'active')
+  `).run(
+    'Event Details Test',
+    'A detailed event description.',
+    'Event Details Hall',
+    '2026-12-10',
+    '10:30 AM',
+    3,
+    organizer.id
+  ).lastInsertRowid;
+
+  db.prepare("INSERT INTO registrations (event_id, user_id, status) VALUES (?, ?, 'confirmed')")
+    .run(eventId, attendee.id);
+
+  try {
+    const details = await request('GET', `/api/events/${eventId}`);
+    assert.strictEqual(details.status, 200);
+    assert.strictEqual(details.body.event.title, 'Event Details Test');
+    assert.strictEqual(details.body.event.description, 'A detailed event description.');
+    assert.strictEqual(details.body.event.date, '2026-12-10');
+    assert.strictEqual(details.body.event.time, '10:30 AM');
+    assert.strictEqual(details.body.event.location, 'Event Details Hall');
+    assert.strictEqual(details.body.event.organizer_name, 'Saketh Narayanam');
+    assert.strictEqual(details.body.event.organizer_email, 'organizer@ems.com');
+    assert.strictEqual(details.body.event.capacity, 3);
+    assert.strictEqual(details.body.event.registered_count, 1);
+    assert.strictEqual(details.body.event.spots_left, 2);
+    assert.strictEqual(details.body.event.is_full, false);
+
+    const missing = await request('GET', '/api/events/999999999');
+    assert.strictEqual(missing.status, 404);
+    assert.strictEqual(missing.body.error, 'Event not found.');
+
+    const invalid = await request('GET', '/api/events/not-an-id');
+    assert.strictEqual(invalid.status, 400);
+    assert.strictEqual(invalid.body.error, 'Invalid ID parameter.');
+  } finally {
+    db.prepare('DELETE FROM registrations WHERE event_id = ?').run(eventId);
+    db.prepare('DELETE FROM events WHERE id = ?').run(eventId);
+  }
+});
+
 test('FR-02: Event listing preserves search, category, date, status, organizer, and capacity fields', async () => {
   const organizer = db.prepare('SELECT id FROM users WHERE email = ?').get('organizer@ems.com');
   const attendee = db.prepare('SELECT id FROM users WHERE email = ?').get('likhith@ems.com');
