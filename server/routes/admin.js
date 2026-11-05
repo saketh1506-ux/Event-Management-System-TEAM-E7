@@ -55,9 +55,13 @@ router.patch('/users/:id/role', validateParams('id'), validatePayload(adminSchem
   }
 
   try {
-    db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId);
+    const result = db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
     return res.status(200).json({ message: 'User role updated successfully.' });
   } catch (err) {
+    console.error('Admin user role update error:', err);
     return res.status(500).json({ error: 'Failed to update user role.' });
   }
 });
@@ -77,9 +81,13 @@ router.patch('/users/:id/status', validateParams('id'), validatePayload(adminSch
   }
 
   try {
-    db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, userId);
+    const result = db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, userId);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
     return res.status(200).json({ message: `User status changed to ${status}.` });
   } catch (err) {
+    console.error('Admin user status update error:', err);
     return res.status(500).json({ error: 'Failed to update user status.' });
   }
 });
