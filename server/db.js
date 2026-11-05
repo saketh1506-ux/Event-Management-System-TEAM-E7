@@ -86,6 +86,18 @@ function initDb() {
     );
   `);
 
+  // Record validated administrative mutations without storing request payloads.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS admin_audit_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      admin_user_id INTEGER NOT NULL,
+      action TEXT NOT NULL,
+      target_id INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE RESTRICT
+    );
+  `);
+
   // Seed demo accounts only when each password is explicitly configured.
   const userCount = db.prepare('SELECT count(*) as count FROM users').get().count;
   if (userCount === 0) {
