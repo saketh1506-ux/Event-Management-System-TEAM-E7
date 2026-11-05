@@ -719,16 +719,112 @@ test('FR-07/FR-08: Event updates, capacity limits, participant access, and delet
 });
 
 test('TC-09: Block unauthorized admin access (FR-10, NFR-04)', async () => {
+  const unauthenticated = await request('GET', '/api/admin/overview');
+  assert.strictEqual(unauthenticated.status, 401);
+
   const userLogin = await request('POST', '/api/auth/login', {
     email: 'likhith@ems.com',
     password: 'User@123'
   });
   assert.strictEqual(userLogin.status, 200);
-  const userToken = userLogin.body.token;
 
-  // Attempting admin route with standard user token
-  const res = await request('GET', '/api/admin/users', null, userToken);
-  assert.strictEqual(res.status, 403);
+  const organizerLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(organizerLogin.status, 200);
+
+  const attendeeDenied = await request('GET', '/api/admin/users', null, userLogin.body.token);
+  assert.strictEqual(attendeeDenied.status, 403);
+  const organizerDenied = await request('GET', '/api/admin/users', null, organizerLogin.body.token);
+  assert.strictEqual(organizerDenied.status, 403);
+
+  const adminLogin = await request('POST', '/api/auth/login', {
+    email: 'admin@ems.com',
+    password: 'Admin@123'
+  });
+  assert.strictEqual(adminLogin.status, 200);
+  const adminAccess = await request('GET', '/api/admin/overview', null, adminLogin.body.token);
+  assert.strictEqual(adminAccess.status, 200);
+});
+
+test('SEC-05: Expired and revoked tokens cannot access admin endpoints', async () => {
+  const invalidAccess = await request('GET', '/api/admin/overview', null, 'invalid.token.value');
+  assert.strictEqual(invalidAccess.status, 401);
+
+  const expiredToken = jwt.sign(
+    { id: 1, name: 'System Admin', email: 'admin@ems.com', role: 'admin' },
+    JWT_SECRET,
+    { expiresIn: '-1h' }
+  );
+  const expiredAccess = await request('GET', '/api/admin/overview', null, expiredToken);
+  assert.strictEqual(expiredAccess.status, 401);
+
+  const adminLogin = await request('POST', '/api/auth/login', {
+    email: 'admin@ems.com',
+    password: 'Admin@123'
+  });
+  assert.strictEqual(adminLogin.status, 200);
+
+  const logout = await request('POST', '/api/auth/logout', {}, adminLogin.body.token);
+  assert.strictEqual(logout.status, 200);
+  const revokedAccess = await request('GET', '/api/admin/overview', null, adminLogin.body.token);
+  assert.strictEqual(revokedAccess.status, 401);
+});
+
+test('SEC-05: Validated admin mutations are recorded in the audit log', async () => {
+  const adminLogin = await request('POST', '/api/auth/login', {
+    email: 'admin@ems.com',
+    password: 'Admin@123'
+  });
+  assert.strictEqual(adminLogin.status, 200);
+
+  const user = await request('POST', '/api/auth/register', {
+    name: 'Audit Test User',
+    email: `audit_${Date.now()}@example.com`,
+    password: 'Password123'
+  });
+  assert.strictEqual(user.status, 201);
+
+  const roleChange = await request(
+    'PATCH',
+    `/api/admin/users/${user.body.user.id}/role`,
+    { role: 'organizer' },
+    adminLogin.body.token
+  );
+  assert.strictEqual(roleChange.status, 200);
+
+  const auditEntry = db.prepare(`
+    SELECT admin_user_id, action, target_id
+    FROM admin_audit_log
+    WHERE target_id = ? AND action = 'PATCH /api/admin/users/:id/role'
+  `).get(user.body.user.id);
+  assert.deepStrictEqual(auditEntry, {
+    admin_user_id: db.prepare("SELECT id FROM users WHERE email = 'admin@ems.com'").get().id,
+    action: 'PATCH /api/admin/users/:id/role',
+    target_id: user.body.user.id
+  });
+
+  const event = await request('POST', '/api/events', {
+    title: `Admin Audit Event ${Date.now()}`,
+    description: 'Audit trail test',
+    category: 'Workshop',
+    location: 'Audit Hall',
+    date: '2026-12-27',
+    time: '10:00 AM',
+    capacity: 10
+  }, adminLogin.body.token);
+  assert.strictEqual(event.status, 201);
+
+  const eventAuditEntry = db.prepare(`
+    SELECT action FROM admin_audit_log
+    WHERE action = 'POST /api/events' AND admin_user_id = ?
+    ORDER BY id DESC LIMIT 1
+  `).get(auditEntry.admin_user_id);
+  assert.strictEqual(eventAuditEntry.action, 'POST /api/events');
+
+  db.prepare('DELETE FROM events WHERE id = ?').run(event.body.event.id);
+  db.prepare('DELETE FROM users WHERE id = ?').run(user.body.user.id);
 });
 
 test('FR-11: Admin moderation returns not found for a missing user', async () => {

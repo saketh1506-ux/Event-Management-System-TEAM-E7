@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 const { validatePayload, validateParams, adminSchemas } = require('../middleware/validate');
+const auditAdminAction = require('../middleware/auditAdminAction');
 
 // All admin routes require authenticated admin
 router.use(authenticateToken, authorizeRoles('admin'));
@@ -46,7 +47,7 @@ router.get('/users', (req, res) => {
 });
 
 // PATCH /api/admin/users/:id/role - Update user role
-router.patch('/users/:id/role', validateParams('id'), validatePayload(adminSchemas.updateRole), (req, res) => {
+router.patch('/users/:id/role', validateParams('id'), validatePayload(adminSchemas.updateRole), auditAdminAction, (req, res) => {
   const userId = req.params.id;
   const { role } = req.body;
 
@@ -67,7 +68,7 @@ router.patch('/users/:id/role', validateParams('id'), validatePayload(adminSchem
 });
 
 // PATCH /api/admin/users/:id/status - Toggle suspend/activate
-router.patch('/users/:id/status', validateParams('id'), validatePayload(adminSchemas.updateStatus), (req, res) => {
+router.patch('/users/:id/status', validateParams('id'), validatePayload(adminSchemas.updateStatus), auditAdminAction, (req, res) => {
   const userId = req.params.id;
   const { status } = req.body;
 
