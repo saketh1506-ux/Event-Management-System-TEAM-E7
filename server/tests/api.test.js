@@ -731,6 +731,34 @@ test('TC-09: Block unauthorized admin access (FR-10, NFR-04)', async () => {
   assert.strictEqual(res.status, 403);
 });
 
+test('FR-11: Admin moderation returns not found for a missing user', async () => {
+  const adminLogin = await request('POST', '/api/auth/login', {
+    email: 'admin@ems.com',
+    password: 'Admin@123'
+  });
+  assert.strictEqual(adminLogin.status, 200);
+  const missingUserId = db.prepare('SELECT COALESCE(MAX(id), 0) + 1 AS id FROM users').get().id;
+
+  const roleUpdate = await request(
+    'PATCH',
+    `/api/admin/users/${missingUserId}/role`,
+    { role: 'organizer' },
+    adminLogin.body.token
+  );
+  assert.strictEqual(roleUpdate.status, 404);
+  assert.strictEqual(roleUpdate.body.error, 'User not found.');
+
+  const statusUpdate = await request(
+    'PATCH',
+    `/api/admin/users/${missingUserId}/status`,
+    { status: 'suspended' },
+    adminLogin.body.token
+  );
+  assert.strictEqual(statusUpdate.status, 404);
+  assert.strictEqual(statusUpdate.body.error, 'User not found.');
+  assert.strictEqual(db.prepare('SELECT id FROM users WHERE id = ?').get(missingUserId), undefined);
+});
+
 // --- SEC-04: Secure Session Handling & Token Expiry ---
 
 test('SEC-04-01: Protected endpoint rejects request when token is missing (401)', async () => {
