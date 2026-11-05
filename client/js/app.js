@@ -688,12 +688,16 @@ class App {
       const body = document.getElementById('modal-event-body');
 
       body.innerHTML = `
-        <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
-          <div class="stat-card" style="padding: 1rem; flex: 1;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem;">
+          <div class="stat-card" style="padding: 1rem;">
             <div>Confirmed</div>
             <div style="font-size: 1.5rem; font-weight: 700; color: var(--success);">${data.confirmed_count} / ${data.capacity}</div>
           </div>
-          <div class="stat-card" style="padding: 1rem; flex: 1;">
+          <div class="stat-card" style="padding: 1rem;">
+            <div>Available</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent);">${data.available_spots}</div>
+          </div>
+          <div class="stat-card" style="padding: 1rem;">
             <div>Cancelled</div>
             <div style="font-size: 1.5rem; font-weight: 700; color: var(--text-muted);">${data.cancelled_count}</div>
           </div>

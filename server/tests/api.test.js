@@ -694,6 +694,7 @@ test('FR-07/FR-08: Event updates, capacity limits, participant access, and delet
     const participants = await request('GET', `/api/events/${eventId}/participants`, null, organizerLogin.body.token);
     assert.strictEqual(participants.status, 200);
     assert.strictEqual(participants.body.confirmed_count, 2);
+    assert.strictEqual(participants.body.available_spots, 1);
     assert.strictEqual(participants.body.cancelled_count, 0);
     assert.strictEqual(participants.body.participants.length, 2);
 

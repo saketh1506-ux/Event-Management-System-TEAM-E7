@@ -149,11 +149,13 @@ function getParticipants(eventId, user) {
   assertEventOwner(event, user, 'view participants for');
 
   const participants = eventModel.findParticipants(eventId);
+  const confirmedCount = participants.filter(participant => participant.status === 'confirmed').length;
   return {
     event_id: Number(eventId),
     event_title: event.title,
     capacity: event.capacity,
-    confirmed_count: participants.filter(participant => participant.status === 'confirmed').length,
+    confirmed_count: confirmedCount,
+    available_spots: Math.max(0, event.capacity - confirmedCount),
     cancelled_count: participants.filter(participant => participant.status === 'cancelled').length,
     participants
   };
