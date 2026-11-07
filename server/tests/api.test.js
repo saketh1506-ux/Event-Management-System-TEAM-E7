@@ -2045,3 +2045,99 @@ test('FR-01-04: Login fails safely for non-existent user with 401 Unauthorized',
   assert.strictEqual(res.status, 401);
   assert.match(res.body.error, /Invalid email or password/i);
 });
+// ---------------------------------------------------------------------------
+// Issue #3: [SEC-01] Password Hashing and Secure Storage Tests
+// ---------------------------------------------------------------------------
+
+test('SEC-01-01: Newly registered passwords are stored as bcrypt hashes', async () => {
+  const email = `sec01_reg_${Date.now()}@example.com`;
+  const plaintextPassword = 'ComplexPassword@123';
+  let userId = null;
+
+  try {
+    const res = await request('POST', '/api/auth/register', {
+      name: 'Bcrypt Hash Test User',
+      email,
+      password: plaintextPassword
+    });
+
+    assert.strictEqual(res.status, 201);
+    userId = res.body.user.id;
+
+    // Retrieve stored password directly from database
+    const dbUser = db.prepare('SELECT password FROM users WHERE id = ?').get(userId);
+    assert.ok(dbUser, 'User record must exist in database');
+
+    // Assert it differs from plaintext
+    assert.notStrictEqual(dbUser.password, plaintextPassword, 'Password must never be stored as plaintext');
+
+    // Assert bcrypt hash structure and work factor of 10 ($2a$10$ or $2b$10$)
+    assert.match(dbUser.password, /^\$2[aby]\$10\$[./A-Za-z0-9]{53}$/, 'Stored password must be a bcrypt hash with cost factor 10');
+
+    // Verify original plaintext password against stored hash using bcrypt
+    const isValid = bcrypt.compareSync(plaintextPassword, dbUser.password);
+    assert.strictEqual(isValid, true, 'Original password must successfully verify against stored hash');
+  } finally {
+    if (userId) {
+      db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+    } else {
+      db.prepare('DELETE FROM users WHERE email = ?').run(email.toLowerCase());
+    }
+  }
+});
+
+test('SEC-01-02: Identical passwords produce distinct hashes through unique salting', async () => {
+  const timestamp = Date.now();
+  const userAEmail = `sec01_user_a_${timestamp}@example.com`;
+  const userBEmail = `sec01_user_b_${timestamp}@example.com`;
+  const sharedPassword = 'CommonSecurePassword#2026';
+  let userAId = null;
+  let userBId = null;
+
+  try {
+    const resA = await request('POST', '/api/auth/register', {
+      name: 'Salting Test User A',
+      email: userAEmail,
+      password: sharedPassword
+    });
+    assert.strictEqual(resA.status, 201);
+    userAId = resA.body.user.id;
+
+    const resB = await request('POST', '/api/auth/register', {
+      name: 'Salting Test User B',
+      email: userBEmail,
+      password: sharedPassword
+    });
+    assert.strictEqual(resB.status, 201);
+    userBId = resB.body.user.id;
+
+    // Retrieve both stored password hashes
+    const userA = db.prepare('SELECT password FROM users WHERE id = ?').get(userAId);
+    const userB = db.prepare('SELECT password FROM users WHERE id = ?').get(userBId);
+
+    assert.ok(userA && userB, 'Both user records must exist in database');
+
+    // Assert that hashes differ despite identical plaintext password
+    assert.notStrictEqual(
+      userA.password,
+      userB.password,
+      'Identical passwords must produce distinct hashes due to unique per-user salting'
+    );
+
+    // Verify original password matches both hashes
+    assert.strictEqual(
+      bcrypt.compareSync(sharedPassword, userA.password),
+      true,
+      'Shared password must verify against User A hash'
+    );
+    assert.strictEqual(
+      bcrypt.compareSync(sharedPassword, userB.password),
+      true,
+      'Shared password must verify against User B hash'
+    );
+  } finally {
+    if (userAId) db.prepare('DELETE FROM users WHERE id = ?').run(userAId);
+    if (userBId) db.prepare('DELETE FROM users WHERE id = ?').run(userBId);
+    db.prepare('DELETE FROM users WHERE email IN (?, ?)').run(userAEmail.toLowerCase(), userBEmail.toLowerCase());
+  }
+});
