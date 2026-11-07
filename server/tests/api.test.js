@@ -633,6 +633,60 @@ test('TC-08: Organizer creates event and sets capacity (FR-07, FR-08)', async ()
   assert.strictEqual(res.body.event.title, eventData.title);
 });
 
+test('Event creation and updates accept only valid calendar dates', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(orgLogin.status, 200);
+  const token = orgLogin.body.token;
+  const eventData = {
+    title: `Calendar Date Validation ${Date.now()}`,
+    description: 'Calendar date validation test',
+    category: 'Workshop',
+    location: 'Validation Hall',
+    date: '2024-02-29',
+    time: '10:00 AM',
+    capacity: 10
+  };
+
+  const created = await request('POST', '/api/events', eventData, token);
+  assert.strictEqual(created.status, 201);
+  const eventId = created.body.event.id;
+
+  try {
+    assert.strictEqual(created.body.event.date, '2024-02-29');
+
+    const validUpdate = await request('PUT', `/api/events/${eventId}`, {
+      date: '2026-11-05'
+    }, token);
+    assert.strictEqual(validUpdate.status, 200);
+    assert.strictEqual(validUpdate.body.event.date, '2026-11-05');
+
+    const invalidDates = ['2026-02-31', '2026-04-31', '2025-02-29'];
+    for (const date of invalidDates) {
+      const invalidCreate = await request('POST', '/api/events', {
+        ...eventData,
+        title: `${eventData.title} ${date}`,
+        date
+      }, token);
+      assert.strictEqual(invalidCreate.status, 400, `Create should reject ${date}`);
+      assert.match(invalidCreate.body.error, /valid calendar date/i);
+
+      const eventBeforeUpdate = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+      const invalidUpdate = await request('PUT', `/api/events/${eventId}`, { date }, token);
+      assert.strictEqual(invalidUpdate.status, 400, `Update should reject ${date}`);
+      assert.match(invalidUpdate.body.error, /valid calendar date/i);
+      assert.deepStrictEqual(
+        db.prepare('SELECT * FROM events WHERE id = ?').get(eventId),
+        eventBeforeUpdate
+      );
+    }
+  } finally {
+    db.prepare('DELETE FROM events WHERE id = ?').run(eventId);
+  }
+});
+
 test('FR-07/FR-08: Event updates, capacity limits, participant access, and deletion preserve ownership rules', async () => {
   const organizerLogin = await request('POST', '/api/auth/login', {
     email: 'organizer@ems.com',
