@@ -1843,3 +1843,122 @@ test('SEC-03-10: SVG, image-based XSS vectors, and dangerous URI schemes are san
   // Cleanup created event
   db.prepare('DELETE FROM events WHERE id = ?').run(createdEvent.id);
 });
+
+
+// ---------------------------------------------------------------------------
+// Issue #2: [FR-01] User Registration and Authentication Tests
+// ---------------------------------------------------------------------------
+
+test('FR-01-01: Prevent duplicate email registration with 409 Conflict', async () => {
+  const email = `dup_test_${Date.now()}@example.com`;
+  let registeredId = null;
+  try {
+    const firstRes = await request('POST', '/api/auth/register', {
+      name: 'First User',
+      email,
+      password: 'Password123'
+    });
+    assert.strictEqual(firstRes.status, 201);
+    registeredId = firstRes.body.user.id;
+
+    // Attempt duplicate registration with same email (case-insensitive check)
+    const dupRes = await request('POST', '/api/auth/register', {
+      name: 'Duplicate User',
+      email: email.toUpperCase(),
+      password: 'DifferentPassword123'
+    });
+    assert.strictEqual(dupRes.status, 409);
+    assert.match(dupRes.body.error, /already exists/i);
+  } finally {
+    if (registeredId) {
+      db.prepare('DELETE FROM users WHERE id = ?').run(registeredId);
+    } else {
+      db.prepare('DELETE FROM users WHERE email = ?').run(email.toLowerCase());
+    }
+  }
+});
+
+test('FR-01-02: Reject registration with invalid email or short password (400)', async () => {
+  // Invalid email format (missing @ and domain)
+  const badEmailRes = await request('POST', '/api/auth/register', {
+    name: 'Bad Email User',
+    email: 'not-an-email',
+    password: 'Password123'
+  });
+  assert.strictEqual(badEmailRes.status, 400);
+  assert.match(badEmailRes.body.error, /Invalid email format/i);
+
+  // Missing email
+  const missingEmailRes = await request('POST', '/api/auth/register', {
+    name: 'Missing Email',
+    email: '',
+    password: 'Password123'
+  });
+  assert.strictEqual(missingEmailRes.status, 400);
+
+  // Password below minimum length (< 6 characters)
+  const shortPassRes = await request('POST', '/api/auth/register', {
+    name: 'Short Password User',
+    email: `shortpass_${Date.now()}@example.com`,
+    password: '12345'
+  });
+  assert.strictEqual(shortPassRes.status, 400);
+  assert.match(shortPassRes.body.error, /Password must be at least 6 characters/i);
+});
+
+test('FR-01-03: Registration and login issue valid JWT token (decoded claims, 24h expiry, cryptographic signature) and omit password hash', async () => {
+  const email = `jwt_user_${Date.now()}@example.com`;
+  let userId = null;
+  try {
+    const regRes = await request('POST', '/api/auth/register', {
+      name: 'JWT Valid User',
+      email,
+      password: 'SecurePassword123'
+    });
+    assert.strictEqual(regRes.status, 201);
+    assert.ok(regRes.body.token, 'Registration response must contain a token');
+    assert.ok(regRes.body.user, 'Registration response must contain user object');
+    assert.strictEqual(regRes.body.user.password, undefined, 'Registration must not expose password hash');
+    userId = regRes.body.user.id;
+
+    // Verify cryptographic signature and decoded claims of registration JWT
+    const regDecoded = jwt.verify(regRes.body.token, JWT_SECRET);
+    assert.strictEqual(regDecoded.id, userId);
+    assert.strictEqual(regDecoded.email, email.toLowerCase());
+    assert.strictEqual(regDecoded.role, 'user');
+    assert.ok(regDecoded.exp && regDecoded.iat);
+    assert.strictEqual(regDecoded.exp - regDecoded.iat, 24 * 60 * 60, 'Token must have 24-hour expiration window');
+
+    // Perform login with valid credentials
+    const loginRes = await request('POST', '/api/auth/login', {
+      email,
+      password: 'SecurePassword123'
+    });
+    assert.strictEqual(loginRes.status, 200);
+    assert.ok(loginRes.body.token, 'Login response must contain a token');
+    assert.ok(loginRes.body.user, 'Login response must contain user object');
+    assert.strictEqual(loginRes.body.user.password, undefined, 'Login must not expose password hash');
+
+    // Verify cryptographic signature and decoded claims of login JWT
+    const loginDecoded = jwt.verify(loginRes.body.token, JWT_SECRET);
+    assert.strictEqual(loginDecoded.id, userId);
+    assert.strictEqual(loginDecoded.email, email.toLowerCase());
+    assert.strictEqual(loginDecoded.role, 'user');
+    assert.strictEqual(loginDecoded.exp - loginDecoded.iat, 24 * 60 * 60, 'Login token must have 24-hour expiration window');
+  } finally {
+    if (userId) {
+      db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+    } else {
+      db.prepare('DELETE FROM users WHERE email = ?').run(email.toLowerCase());
+    }
+  }
+});
+
+test('FR-01-04: Login fails safely for non-existent user with 401 Unauthorized', async () => {
+  const res = await request('POST', '/api/auth/login', {
+    email: 'nonexistent_account_999@example.com',
+    password: 'AnyPassword123'
+  });
+  assert.strictEqual(res.status, 401);
+  assert.match(res.body.error, /Invalid email or password/i);
+});
