@@ -1843,3 +1843,85 @@ test('SEC-03-10: SVG, image-based XSS vectors, and dangerous URI schemes are san
   // Cleanup created event
   db.prepare('DELETE FROM events WHERE id = ?').run(createdEvent.id);
 });
+
+
+// ---------------------------------------------------------------------------
+// Issue #4: [SEC-02] Role-Based Authorization & Route Guards Tests
+// ---------------------------------------------------------------------------
+
+test('SEC-02-01: Unauthenticated event creation fails with 401 Unauthorized', async () => {
+  const eventsCountBefore = db.prepare('SELECT COUNT(*) AS count FROM events').get().count;
+
+  const res = await request('POST', '/api/events', {
+    title: `Unauthenticated Event ${Date.now()}`,
+    description: 'Should be rejected without authentication',
+    category: 'Technology',
+    location: 'Main Hall',
+    date: '2026-12-30',
+    time: '10:00 AM',
+    capacity: 50
+  });
+
+  assert.strictEqual(res.status, 401);
+  assert.match(res.body.error, /token required|log in/i);
+
+  const eventsCountAfter = db.prepare('SELECT COUNT(*) AS count FROM events').get().count;
+  assert.strictEqual(eventsCountAfter, eventsCountBefore, 'No event should be created on unauthenticated request');
+});
+
+test('SEC-02-02: Attendee cannot create an event (403 Forbidden)', async () => {
+  const attendeeLogin = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  assert.strictEqual(attendeeLogin.status, 200);
+  const attendeeToken = attendeeLogin.body.token;
+
+  const eventsCountBefore = db.prepare('SELECT COUNT(*) AS count FROM events').get().count;
+
+  const res = await request('POST', '/api/events', {
+    title: `Attendee Unauthorized Event ${Date.now()}`,
+    description: 'Attendee attempting organizer event creation',
+    category: 'Technology',
+    location: 'Main Hall',
+    date: '2026-12-30',
+    time: '10:00 AM',
+    capacity: 50
+  }, attendeeToken);
+
+  assert.strictEqual(res.status, 403);
+  assert.match(res.body.error, /forbidden|permission/i);
+
+  const eventsCountAfter = db.prepare('SELECT COUNT(*) AS count FROM events').get().count;
+  assert.strictEqual(eventsCountAfter, eventsCountBefore, 'No event should be created by an attendee');
+});
+
+test('SEC-02-03: Authorization middleware precedes payload validation (403 before 400)', async () => {
+  const attendeeLogin = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  assert.strictEqual(attendeeLogin.status, 200);
+  const attendeeToken = attendeeLogin.body.token;
+
+  const eventsCountBefore = db.prepare('SELECT COUNT(*) AS count FROM events').get().count;
+
+  // Deliberately malformed payload: missing required fields, invalid capacity, etc.
+  const malformedPayload = {
+    title: '', // invalid
+    capacity: -10 // invalid negative capacity
+  };
+
+  const res = await request('POST', '/api/events', malformedPayload, attendeeToken);
+
+  // Must return 403 Forbidden (from authorizeRoles) rather than 400 Bad Request (from validatePayload)
+  assert.strictEqual(
+    res.status,
+    403,
+    'Role authorization middleware must execute before payload validation'
+  );
+  assert.match(res.body.error, /forbidden|permission/i);
+
+  const eventsCountAfter = db.prepare('SELECT COUNT(*) AS count FROM events').get().count;
+  assert.strictEqual(eventsCountAfter, eventsCountBefore, 'No event should be created');
+});
