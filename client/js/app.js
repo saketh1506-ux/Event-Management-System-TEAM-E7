@@ -6,6 +6,7 @@ class App {
     this.currentUser = JSON.parse(localStorage.getItem('user') || 'null');
     this.events = [];
     this.searchTimer = null;
+    this.previouslyFocusedElement = null;
     this.init();
   }
 
@@ -24,6 +25,7 @@ class App {
     this.updateAuthUI();
     this.verifySession();
     this.fetchEvents();
+    this.setupGlobalAccessibility();
   }
 
   async verifySession() {
@@ -158,8 +160,93 @@ class App {
     this.fetchEvents();
   }
 
+  // --- Mobile Navigation (NFR-05, AC-3) ---
+  toggleNav() {
+    const navLinks = document.getElementById('main-nav-links');
+    const toggleBtn = document.getElementById('nav-toggle-btn');
+    if (!navLinks) return;
+    const isExpanded = navLinks.classList.toggle('active');
+    if (toggleBtn) {
+      toggleBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+    }
+  }
+
+  closeNav() {
+    const navLinks = document.getElementById('main-nav-links');
+    const toggleBtn = document.getElementById('nav-toggle-btn');
+    if (navLinks && navLinks.classList.contains('active')) {
+      navLinks.classList.remove('active');
+      if (toggleBtn) {
+        toggleBtn.setAttribute('aria-expanded', 'false');
+      }
+    }
+  }
+
+  setupGlobalAccessibility() {
+    // Escape key closes open modals or mobile nav
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' || e.key === 'Esc') {
+        const activeModal = document.querySelector('.modal-overlay.active');
+        if (activeModal) {
+          this.hideModal(activeModal.id);
+          return;
+        }
+        this.closeNav();
+      }
+
+      // Document-level focus containment for currently active modal
+      if (e.key === 'Tab') {
+        const activeModal = document.querySelector('.modal-overlay.active');
+        if (!activeModal) return;
+
+        const currentFocusables = this.getFocusableElements(activeModal);
+        if (currentFocusables.length === 0) {
+          e.preventDefault();
+          if (!activeModal.hasAttribute('tabindex')) {
+            activeModal.setAttribute('tabindex', '-1');
+          }
+          activeModal.focus();
+          return;
+        }
+
+        const firstEl = currentFocusables[0];
+        const lastEl = currentFocusables[currentFocusables.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstEl || !activeModal.contains(document.activeElement)) {
+            e.preventDefault();
+            lastEl.focus();
+          }
+        } else {
+          if (document.activeElement === lastEl || !activeModal.contains(document.activeElement)) {
+            e.preventDefault();
+            firstEl.focus();
+          }
+        }
+      }
+    });
+
+    // Close mobile nav when clicking outside navbar
+    document.addEventListener('click', (e) => {
+      const navbar = document.querySelector('.navbar');
+      if (navbar && !navbar.contains(e.target)) {
+        this.closeNav();
+      }
+    });
+
+    // Backdrop click closing for modals (clicking overlay, not modal-content)
+    document.querySelectorAll('.modal-overlay').forEach(modal => {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          this.hideModal(modal.id);
+        }
+      });
+    });
+  }
+
   // --- Views & Routing ---
   navigate(viewName) {
+    this.closeNav();
     ['home', 'my-events', 'organizer', 'admin'].forEach(v => {
       const el = document.getElementById(`view-${v}`);
       if (el) el.style.display = (v === viewName) ? 'block' : 'none';
@@ -954,15 +1041,58 @@ class App {
     }
   }
 
-  // --- Modals & Toasts ---
+  // --- Modals & Toasts (NFR-05, a11y) ---
+  getFocusableElements(container) {
+    if (!container) return [];
+    const selector = [
+      'a[href]:not([tabindex="-1"])',
+      'button:not(:disabled):not([tabindex="-1"])',
+      'input:not([type="hidden"]):not(:disabled):not([tabindex="-1"])',
+      'select:not(:disabled):not([tabindex="-1"])',
+      'textarea:not(:disabled):not([tabindex="-1"])',
+      '[tabindex]:not([tabindex="-1"])'
+    ].join(', ');
+
+    return Array.from(container.querySelectorAll(selector)).filter(el => {
+      if (typeof window !== 'undefined' && window.getComputedStyle) {
+        const style = window.getComputedStyle(el);
+        if (style.visibility === 'hidden' || style.visibility === 'collapse') {
+          return false;
+        }
+      }
+      return el.getClientRects().length > 0;
+    });
+  }
+
   showModal(id) {
+    this.closeNav();
     const el = document.getElementById(id);
-    if (el) el.classList.add('active');
+    if (!el) return;
+
+    this.previouslyFocusedElement = document.activeElement;
+    el.classList.add('active');
+
+    // Focus first focusable control inside modal synchronously if possible
+    const focusables = this.getFocusableElements(el);
+    if (focusables.length > 0) {
+      focusables[0].focus();
+    } else {
+      if (!el.hasAttribute('tabindex')) {
+        el.setAttribute('tabindex', '-1');
+      }
+      el.focus();
+    }
   }
 
   hideModal(id) {
     const el = document.getElementById(id);
-    if (el) el.classList.remove('active');
+    if (el) {
+      el.classList.remove('active');
+      if (this.previouslyFocusedElement && typeof this.previouslyFocusedElement.focus === 'function') {
+        this.previouslyFocusedElement.focus();
+        this.previouslyFocusedElement = null;
+      }
+    }
   }
 
   toast(message, type = 'info') {

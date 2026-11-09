@@ -10,12 +10,15 @@
 <body>
   <!-- Navigation Header -->
   <header class="navbar">
-    <div class="brand" onclick="app.navigate('home')">
+    <a href="#home" class="brand" onclick="event.preventDefault(); app.navigate('home')">
       <i class="fa-solid fa-calendar-star" style="color: #6366f1;"></i>
       <span>EventHub</span>
       <span class="badge-team">Team E7</span>
-    </div>
-    <nav class="nav-links">
+    </a>
+    <button class="nav-toggle" id="nav-toggle-btn" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="main-nav-links" onclick="app.toggleNav()">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+    <nav class="nav-links" id="main-nav-links" aria-label="Main Navigation">
       <button class="nav-btn active" id="nav-events-btn" onclick="app.navigate('home')">
         <i class="fa-regular fa-calendar-days"></i> Explore Events
       </button>
@@ -44,7 +47,7 @@
       <div id="user-profile-controls" style="display: none; align-items: center; gap: 0.75rem;">
         <span id="user-display-name" style="font-weight: 600; color: #a5b4fc; font-size: 0.9rem;"></span>
         <span id="user-role-badge" style="font-size: 0.75rem; background: rgba(255,255,255,0.1); padding: 0.2rem 0.5rem; border-radius: 4px;"></span>
-        <button class="btn-secondary" onclick="app.logout()"><i class="fa-solid fa-right-from-bracket"></i></button>
+        <button class="btn-secondary" onclick="app.logout()" aria-label="Log Out"><i class="fa-solid fa-right-from-bracket"></i></button>
       </div>
     </nav>
   </header>
@@ -59,9 +62,9 @@
         <p>Built for students, organizers, and administrators with real-time capacity management, duplicate-prevention, and instant updates.</p>
 
         <div class="filters-bar">
-          <input type="text" id="search-input" class="search-input" placeholder="Search events by title, topic, or venue..." oninput="app.debouncedSearch()">
+          <input type="text" id="search-input" class="search-input" placeholder="Search events by title, topic, or venue..." aria-label="Search events by title, topic, or venue" oninput="app.debouncedSearch()">
 
-          <select id="category-filter" class="filter-select" onchange="app.filterEvents()">
+          <select id="category-filter" class="filter-select" aria-label="Filter events by category" onchange="app.filterEvents()">
             <option value="All">All Categories</option>
             <option value="Technology">Technology</option>
             <option value="Workshop">Workshop</option>
@@ -185,19 +188,19 @@
   </main>
 
   <!-- Login Modal -->
-  <div id="login-modal" class="modal-overlay">
+  <div id="login-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="login-modal-title">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>Log In to EventHub</h2>
-        <button class="modal-close" onclick="app.hideModal('login-modal')">&times;</button>
+        <h2 id="login-modal-title">Log In to EventHub</h2>
+        <button class="modal-close" aria-label="Close login dialog" onclick="app.hideModal('login-modal')">&times;</button>
       </div>
       <form id="login-form" onsubmit="app.handleLogin(event)">
         <div class="form-group">
-          <label>Email Address</label>
+          <label for="login-email">Email Address</label>
           <input type="email" id="login-email" class="form-control" placeholder="admin@ems.com / user@ems.com" required>
         </div>
         <div class="form-group">
-          <label>Password</label>
+          <label for="login-password">Password</label>
           <input type="password" id="login-password" class="form-control" placeholder="••••••••" required>
         </div>
         <button type="submit" class="btn-primary" style="width: 100%; margin-top: 1rem;">Log In</button>
@@ -212,27 +215,27 @@
   </div>
 
   <!-- Register Modal -->
-  <div id="register-modal" class="modal-overlay">
+  <div id="register-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="register-modal-title">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>Create an Account</h2>
-        <button class="modal-close" onclick="app.hideModal('register-modal')">&times;</button>
+        <h2 id="register-modal-title">Create an Account</h2>
+        <button class="modal-close" aria-label="Close registration dialog" onclick="app.hideModal('register-modal')">&times;</button>
       </div>
       <form id="register-form" onsubmit="app.handleRegister(event)">
         <div class="form-group">
-          <label>Full Name</label>
+          <label for="reg-name">Full Name</label>
           <input type="text" id="reg-name" class="form-control" placeholder="John Doe" required>
         </div>
         <div class="form-group">
-          <label>Email Address</label>
+          <label for="reg-email">Email Address</label>
           <input type="email" id="reg-email" class="form-control" placeholder="john@example.com" required>
         </div>
         <div class="form-group">
-          <label>Password</label>
+          <label for="reg-password">Password</label>
           <input type="password" id="reg-password" class="form-control" placeholder="At least 6 characters" minlength="6" required>
         </div>
         <div class="form-group">
-          <label>Account Type</label>
+          <label for="reg-role">Account Type</label>
           <select id="reg-role" class="form-control">
             <option value="user">Attendee (Register for events)</option>
             <option value="organizer">Organizer (Host & manage events)</option>
@@ -244,19 +247,19 @@
   </div>
 
   <!-- Create Event Modal -->
-  <div id="create-event-modal" class="modal-overlay">
+  <div id="create-event-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="create-modal-title">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>Host a New Event</h2>
-        <button class="modal-close" onclick="app.hideModal('create-event-modal')">&times;</button>
+        <h2 id="create-modal-title">Host a New Event</h2>
+        <button class="modal-close" aria-label="Close event creation dialog" onclick="app.hideModal('create-event-modal')">&times;</button>
       </div>
       <form id="create-event-form" onsubmit="app.handleCreateEvent(event)">
         <div class="form-group">
-          <label>Event Title</label>
+          <label for="event-title">Event Title</label>
           <input type="text" id="event-title" class="form-control" placeholder="e.g. AI & Cloud Architecture Summit" required>
         </div>
         <div class="form-group">
-          <label>Category</label>
+          <label for="event-category">Category</label>
           <select id="event-category" class="form-control">
             <option value="Technology">Technology</option>
             <option value="Workshop">Workshop</option>
@@ -266,25 +269,25 @@
           </select>
         </div>
         <div class="form-group">
-          <label>Description</label>
+          <label for="event-desc">Description</label>
           <textarea id="event-desc" class="form-control" rows="3" placeholder="Provide event details, schedule and requirements..."></textarea>
         </div>
         <div class="form-group">
-          <label>Location / Venue</label>
+          <label for="event-location">Location / Venue</label>
           <input type="text" id="event-location" class="form-control" placeholder="e.g. Main Auditorium or Virtual Meeting link" required>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <div class="form-grid-2">
           <div class="form-group">
-            <label>Date</label>
+            <label for="event-date">Date</label>
             <input type="date" id="event-date" class="form-control" required>
           </div>
           <div class="form-group">
-            <label>Time</label>
+            <label for="event-time">Time</label>
             <input type="text" id="event-time" class="form-control" placeholder="10:00 AM" required>
           </div>
         </div>
         <div class="form-group">
-          <label>Maximum Participant Capacity</label>
+          <label for="event-capacity">Maximum Participant Capacity</label>
           <input type="number" id="event-capacity" class="form-control" min="1" max="10000" placeholder="50" required>
         </div>
         <button type="submit" class="btn-primary" style="width: 100%; margin-top: 1rem;">Publish Event</button>
@@ -293,22 +296,22 @@
   </div>
 
   <!-- Edit Event Modal -->
-  <div id="edit-event-modal" class="modal-overlay">
+  <div id="edit-event-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>Edit Event</h2>
-        <button class="modal-close" onclick="app.hideModal('edit-event-modal')">&times;</button>
+        <h2 id="edit-modal-title">Edit Event</h2>
+        <button class="modal-close" aria-label="Close edit event dialog" onclick="app.hideModal('edit-event-modal')">&times;</button>
       </div>
       <form id="edit-event-form" onsubmit="app.handleEditEvent(event)">
         <input type="hidden" id="edit-event-id">
 
         <div class="form-group">
-          <label>Event Title</label>
+          <label for="edit-event-title">Event Title</label>
           <input type="text" id="edit-event-title" class="form-control" required>
         </div>
 
         <div class="form-group">
-          <label>Category</label>
+          <label for="edit-event-category">Category</label>
           <select id="edit-event-category" class="form-control">
             <option value="Technology">Technology</option>
             <option value="Workshop">Workshop</option>
@@ -319,29 +322,29 @@
         </div>
 
         <div class="form-group">
-          <label>Description</label>
+          <label for="edit-event-desc">Description</label>
           <textarea id="edit-event-desc" class="form-control" rows="3" required></textarea>
         </div>
 
         <div class="form-group">
-          <label>Location / Venue</label>
+          <label for="edit-event-location">Location / Venue</label>
           <input type="text" id="edit-event-location" class="form-control" required>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <div class="form-grid-2">
           <div class="form-group">
-            <label>Date</label>
+            <label for="edit-event-date">Date</label>
             <input type="date" id="edit-event-date" class="form-control" required>
           </div>
 
           <div class="form-group">
-            <label>Time</label>
+            <label for="edit-event-time">Time</label>
             <input type="text" id="edit-event-time" class="form-control" required>
           </div>
         </div>
 
         <div class="form-group">
-          <label>Maximum Participant Capacity</label>
+          <label for="edit-event-capacity">Maximum Participant Capacity</label>
           <input type="number" id="edit-event-capacity" class="form-control" min="1" max="10000" required>
         </div>
 
@@ -353,31 +356,31 @@
   </div>
 
   <!-- Event Details & Roster Modal -->
-  <div id="details-modal" class="modal-overlay">
+  <div id="details-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-event-title">
     <div class="modal-content" style="max-width: 650px;">
       <div class="modal-header">
         <h2 id="modal-event-title">Event Details</h2>
-        <button class="modal-close" onclick="app.hideModal('details-modal')">&times;</button>
+        <button class="modal-close" aria-label="Close details dialog" onclick="app.hideModal('details-modal')">&times;</button>
       </div>
       <div id="modal-event-body"></div>
     </div>
   </div>
 
   <!-- Broadcast Update Modal -->
-  <div id="broadcast-modal" class="modal-overlay">
+  <div id="broadcast-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="broadcast-modal-title">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>Send Event Announcement</h2>
-        <button class="modal-close" onclick="app.hideModal('broadcast-modal')">&times;</button>
+        <h2 id="broadcast-modal-title">Send Event Announcement</h2>
+        <button class="modal-close" aria-label="Close broadcast announcement dialog" onclick="app.hideModal('broadcast-modal')">&times;</button>
       </div>
       <form id="broadcast-form" onsubmit="app.handleSendUpdate(event)">
         <input type="hidden" id="broadcast-event-id">
         <div class="form-group">
-          <label>Announcement Title</label>
+          <label for="broadcast-title">Announcement Title</label>
           <input type="text" id="broadcast-title" class="form-control" placeholder="e.g. Venue Room Update" required>
         </div>
         <div class="form-group">
-          <label>Message Content</label>
+          <label for="broadcast-message">Message Content</label>
           <textarea id="broadcast-message" class="form-control" rows="4" placeholder="Important update for all registered attendees..." required></textarea>
         </div>
         <button type="submit" class="btn-primary" style="width: 100%;">Broadcast to Registered Attendees</button>

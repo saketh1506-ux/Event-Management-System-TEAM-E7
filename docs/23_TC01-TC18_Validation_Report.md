@@ -23,7 +23,7 @@
 | TC-09 | Deny normal attendees access to admin endpoints. | `TC-09: Block unauthorized admin access`; `SEC-05-04` | Passed: attendee admin access returned 403 and failed authorization left database counts unchanged. | None. | PASS |
 | TC-10 | Registration completes within 2 seconds under normal load. | No automated timing assertion exists in the suite. | PASS: five sequential successful registrations against a fresh temporary SQLite database averaged 3.79 ms and had a maximum of 9.25 ms. All five completed below the 2000 ms target. | No browser verification is required; browser testing was not performed. | PASS |
 | TC-11 | Passwords must not be stored as readable plaintext. | `SEC-05-01: Seeded user passwords...` | Passed: seeded passwords were bcrypt hashes and compared successfully with their known passwords. | None. | PASS |
-| TC-12 | Core screens remain usable and readable at desktop and mobile viewport sizes. | No browser automation or viewport assertion exists. | Not executed. | Inspect Explore Events, login/register, My Registrations, organizer dashboard, and admin console at representative desktop and mobile widths in each selected browser. Record navigation, overflow, text truncation, modal operation, and horizontal scrolling. | NOT VERIFIED |
+| TC-12 | Core screens remain usable and readable at desktop and mobile viewport sizes. | Responsive layout, media queries (<=1024px, <=768px, <=480px), collapsible mobile navigation, adaptive grid, and keyboard/modal accessibility implemented. | Static analysis and syntax verification passed. Actual manual browser execution across desktop and mobile viewports has not yet been conducted. | Perform manual visual inspection in Chrome, Edge, and Firefox at representative viewport widths (320px, 375px, 425px, 768px, 1024px, 1440px, 1920px). Record visual evidence and check for layout defects, overflow, and control accessibility. | PARTIALLY VERIFIED — Code implemented; Browser viewport testing pending |
 | TC-13 | Repeated registration and cancellation must keep counts and capacity consistent. | `TC-13: Repeated registration and cancellation keeps counts consistent` | Passed: two register/cancel cycles kept confirmed count, cancelled count, event count, and available spots consistent. | None for API acceptance; browser refresh evidence is optional manual confirmation. | PASS |
 | TC-14 | Major functions are separated into maintainable components/modules. | No automated structural-quality assertion is appropriate for this case. | Not mechanically executed. | Review the final structure against the architecture: Express routes, middleware, database layer, static client, and separation of concerns. Record reviewed paths and any finding. | NOT VERIFIED |
 | TC-15 | An owner organizer can retrieve the participant report, while unauthorized users are denied. | `TC-15: Organizer registration report is returned to authorized owners only` | Passed: owner received confirmed participant details; another organizer and an attendee received 403. | Optional UI participant-report verification. | PASS |
@@ -76,13 +76,29 @@ The benchmark did not use concurrent load or browser testing. No event-listing p
 
 ### TC-12 â€” responsive and browser compatibility checklist
 
-**Execution record:** Pending. No browser or viewport result is claimed.
+**Execution record:** In progress. Responsive UI layout (NFR-05) and accessibility enhancements implemented in source files. Static code review and JavaScript syntax checks passed. Actual browser viewport testing and visual inspection remain pending.
+
+**Implementation details (Issue #50 / NFR-05):**
+- Responsive Navigation: Hamburger toggle with `aria-expanded`, `aria-controls`, and clean collapse below 768px. Auto-closes upon navigation and outside click.
+- Layouts & Grids: Added media queries at 1024px, 768px, and 480px. `.events-grid` updated to `minmax(min(100%, 320px), 1fr)` to prevent horizontal overflow on small mobile viewports.
+- Form Layouts: Two-column date/time grids (`.form-grid-2`) adapt to single-column on viewports <= 768px.
+- Touch Targets: Buttons, navigation controls, and inputs styled with minimum 44px touch-friendly dimensions on mobile.
+- Form Accessibility: All 22 form controls connected to matching `<label for="...">` tags. Icon buttons and filter controls equipped with descriptive `aria-label` attributes.
+- Modal Accessibility: All 6 modals enhanced with `role="dialog"`, `aria-modal="true"`, and `aria-labelledby`. Keyboard navigation includes Tab/Shift+Tab focus trapping, synchronous initial focus, Escape key closing, and focus restoration to triggering elements.
+- Focus Indicators: High-contrast `:focus-visible` indicators added across all interactive elements.
+
+| Viewport Category | Target Widths | Implementation Scope | Verification Status |
+|---|---|---|---|
+| Mobile Small | 320px, 375px | Single-column cards, full-width inputs, >=44px touch targets, compact modal padding | Code implemented; Manual browser inspection pending |
+| Mobile Large | 425px | Fluid layout, stacked action buttons, responsive toast placement | Code implemented; Manual browser inspection pending |
+| Tablet | 768px | Collapsible drawer navigation, single-column date/time modal form stacking | Code implemented; Manual browser inspection pending |
+| Laptop / Desktop | 1024px, 1440px, 1920px | Full horizontal navigation bar, multi-column card grid, centered modals | Code implemented; Manual browser inspection pending |
 
 | Browser and version | 1440 Ã— 900 desktop | 1024 Ã— 768 tablet | 390 Ã— 844 mobile | Evidence |
 |---|---|---|---|---|
-| Chrome | Pending | Pending | Pending | Screenshots/video and dated execution record required |
-| Microsoft Edge | Pending | Pending | Pending | Screenshots/video and dated execution record required |
-| Firefox | Pending | Pending | Pending | Screenshots/video and dated execution record required |
+| Chrome | Pending manual execution | Pending manual execution | Pending manual execution | Browser inspection and screenshots required |
+| Microsoft Edge | Pending manual execution | Pending manual execution | Pending manual execution | Browser inspection and screenshots required |
+| Firefox | Pending manual execution | Pending manual execution | Pending manual execution | Browser inspection and screenshots required |
 
 For each browser/viewport, verify:
 
