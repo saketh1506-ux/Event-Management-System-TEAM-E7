@@ -23,17 +23,17 @@
 | TC-09 | Deny normal attendees access to admin endpoints. | `TC-09: Block unauthorized admin access`; `SEC-05-04` | Passed: attendee admin access returned 403 and failed authorization left database counts unchanged. | None. | PASS |
 | TC-10 | Registration completes within 2 seconds under normal load. | No automated timing assertion exists in the suite. | PASS: five sequential successful registrations against a fresh temporary SQLite database averaged 3.79 ms and had a maximum of 9.25 ms. All five completed below the 2000 ms target. | No browser verification is required; browser testing was not performed. | PASS |
 | TC-11 | Passwords must not be stored as readable plaintext. | `SEC-05-01: Seeded user passwords...` | Passed: seeded passwords were bcrypt hashes and compared successfully with their known passwords. | None. | PASS |
-| TC-12 | Core screens remain usable and readable at desktop and mobile viewport sizes. | Responsive layout, media queries (<=1024px, <=768px, <=480px), collapsible mobile navigation, adaptive grid, and keyboard/modal accessibility implemented. | Static analysis and syntax verification passed. Actual manual browser execution across desktop and mobile viewports has not yet been conducted. | Perform manual visual inspection in Chrome, Edge, and Firefox at representative viewport widths (320px, 375px, 425px, 768px, 1024px, 1440px, 1920px). Record visual evidence and check for layout defects, overflow, and control accessibility. | PARTIALLY VERIFIED — Code implemented; Browser viewport testing pending |
+| TC-12 | Core screens remain usable and readable at desktop and mobile viewport sizes. | Responsive layout, media queries (<=1024px, <=768px, <=480px), collapsible mobile navigation, adaptive grid, and keyboard/modal accessibility implemented. | Static analysis and syntax verification passed. Microsoft Edge at 375px mobile viewport manually inspected; desktop layout manually inspected (exact width not established). Other viewport sizes and Chrome/Firefox pending. | Perform manual visual inspection in Chrome, Edge, and Firefox at representative viewport widths (320px, 375px, 425px, 768px, 1024px, 1440px, 1920px). Record visual evidence and check for layout defects, overflow, and control accessibility. | PARTIALLY VERIFIED — Edge mobile (375px) and desktop layout inspected; remaining viewport and cross-browser testing pending |
 | TC-13 | Repeated registration and cancellation must keep counts and capacity consistent. | `TC-13: Repeated registration and cancellation keeps counts consistent` | Passed: two register/cancel cycles kept confirmed count, cancelled count, event count, and available spots consistent. | None for API acceptance; browser refresh evidence is optional manual confirmation. | PASS |
 | TC-14 | Major functions are separated into maintainable components/modules. | No automated structural-quality assertion is appropriate for this case. | Not mechanically executed. | Review the final structure against the architecture: Express routes, middleware, database layer, static client, and separation of concerns. Record reviewed paths and any finding. | NOT VERIFIED |
 | TC-15 | An owner organizer can retrieve the participant report, while unauthorized users are denied. | `TC-15: Organizer registration report is returned to authorized owners only` | Passed: owner received confirmed participant details; another organizer and an attendee received 403. | Optional UI participant-report verification. | PASS |
-| TC-16 | Malicious input is safely rejected and expired sessions require re-authentication. | `SEC-04-03: Protected endpoint rejects expired token`; `SEC-05-02: SQL injection login and malformed input...` | API passed: expired JWT and malformed/injection-style requests were rejected; database counts remained unchanged. Browser-level session verification has not been performed. | After expiry or logout, reload or invoke a protected UI workflow and confirm the application redirects or requires re-authentication without displaying protected data. | PARTIALLY VERIFIED â€” API PASS, browser verification pending |
+| TC-16 | Malicious input is safely rejected and expired sessions require re-authentication. | `SEC-04-03: Protected endpoint rejects expired token`; `SEC-05-02: SQL injection login and malformed input...` | API passed: expired JWT and malformed/injection-style requests were rejected; database counts remained unchanged. Browser-level session verification has not been performed. | After expiry or logout, reload or invoke a protected UI workflow and confirm the application redirects or requires re-authentication without displaying protected data. | PARTIALLY VERIFIED — API PASS, browser verification pending |
 | TC-17 | Authorized organizers can send an update and registered participants can receive it. | `TC-17: Organizer event update is available to registered attendees` | Passed: update creation returned 201; attendee dashboard returned the notification; attendee update creation returned 403. | Optional browser delivery/visibility check. | PASS |
 | TC-18 | Authorized administrators can manage users/events and non-administrators are denied. | `TC-18: Administrator manages events while non-administrators are denied`; `SEC-05-03: Administrator can change a temporary user role...` | Passed: administrator removed the event and attendee hard-delete access returned 403; administrator role management and denial were also verified. | Optional browser admin-console action verification. | PASS |
 
 ## Manual verification checklist
 
-### TC-10 â€” verified registration response-time benchmark
+### TC-10 — verified registration response-time benchmark
 
 **Test setup**
 
@@ -70,13 +70,13 @@
 - Average response time: `3.79 ms`
 - Maximum response time: `9.25 ms`
 - Required registration threshold: less than `2000 ms`
-- Result: **PASS** â€” every registration completed successfully, all measured times were below the threshold, and the final registration count was verified as 5.
+- Result: **PASS** — every registration completed successfully, all measured times were below the threshold, and the final registration count was verified as 5.
 
 The benchmark did not use concurrent load or browser testing. No event-listing performance claim is made by this benchmark.
 
-### TC-12 â€” responsive and browser compatibility checklist
+### TC-12 — responsive and browser compatibility checklist
 
-**Execution record:** In progress. Responsive UI layout (NFR-05) and accessibility enhancements implemented in source files. Static code review and JavaScript syntax checks passed. Actual browser viewport testing and visual inspection remain pending.
+**Execution record:** In progress. Responsive UI layout (NFR-05) and accessibility enhancements implemented in source files. Static code review and JavaScript syntax checks passed. Microsoft Edge at 375px mobile viewport has been manually inspected. Desktop layout has been manually inspected (exact viewport width not established). Inspection across other viewport sizes and in Chrome and Firefox remains pending.
 
 **Implementation details (Issue #50 / NFR-05):**
 - Responsive Navigation: Hamburger toggle with `aria-expanded`, `aria-controls`, and clean collapse below 768px. Auto-closes upon navigation and outside click.
@@ -89,15 +89,15 @@ The benchmark did not use concurrent load or browser testing. No event-listing p
 
 | Viewport Category | Target Widths | Implementation Scope | Verification Status |
 |---|---|---|---|
-| Mobile Small | 320px, 375px | Single-column cards, full-width inputs, >=44px touch targets, compact modal padding | Code implemented; Manual browser inspection pending |
+| Mobile Small | 320px, 375px | Single-column cards, full-width inputs, >=44px touch targets, compact modal padding | Manually inspected in Microsoft Edge at 375px; 320px pending |
 | Mobile Large | 425px | Fluid layout, stacked action buttons, responsive toast placement | Code implemented; Manual browser inspection pending |
 | Tablet | 768px | Collapsible drawer navigation, single-column date/time modal form stacking | Code implemented; Manual browser inspection pending |
-| Laptop / Desktop | 1024px, 1440px, 1920px | Full horizontal navigation bar, multi-column card grid, centered modals | Code implemented; Manual browser inspection pending |
+| Laptop / Desktop | 1024px, 1440px, 1920px | Full horizontal navigation bar, multi-column card grid, centered modals | Desktop layout manually inspected (exact width not established); multi-resolution inspection pending |
 
-| Browser and version | 1440 Ã— 900 desktop | 1024 Ã— 768 tablet | 390 Ã— 844 mobile | Evidence |
+| Browser and version | Desktop layout (target 1440 × 900) | Tablet layout (target 1024 × 768) | Mobile layout (target 390 × 844) | Evidence |
 |---|---|---|---|---|
 | Chrome | Pending manual execution | Pending manual execution | Pending manual execution | Browser inspection and screenshots required |
-| Microsoft Edge | Pending manual execution | Pending manual execution | Pending manual execution | Browser inspection and screenshots required |
+| Microsoft Edge | Manually inspected (desktop layout verified; exact width not established) | Pending manual execution | Manually inspected at 375px mobile viewport | Manual inspection completed; formal screenshots/evidence pending |
 | Firefox | Pending manual execution | Pending manual execution | Pending manual execution | Browser inspection and screenshots required |
 
 For each browser/viewport, verify:
@@ -113,7 +113,7 @@ For each browser/viewport, verify:
 
 Record pass/fail per screen and browser/viewport, and attach defect reproduction steps for any failure. Browser compatibility is not verified until each selected browser is actually executed.
 
-### TC-14 â€” architecture review checklist
+### TC-14 — architecture review checklist
 
 **Review metadata**
 
@@ -162,7 +162,7 @@ For each reviewed item, confirm and record Pass/Fail/Observation:
 
 - All automated API cases with sufficient backend behavior are executed through the temporary SQLite suite.
 - TC-10 registration latency is PASS: five isolated sequential registrations averaged 3.79 ms with a maximum of 9.25 ms, below the 2000 ms threshold.
-- TC-12 remains pending because no Chrome, Edge, or Firefox viewport executions are recorded.
+- TC-12 is partially verified: Microsoft Edge at 375px mobile width and desktop layout were manually inspected and passed; remaining target viewport widths and cross-browser execution (Chrome, Firefox) remain pending.
 - TC-14 remains pending because no reviewer, date, commit, or findings are recorded.
 - TC-16 is partially verified: API expired-token and malicious-input behavior passed, while browser-level expiration/re-authentication behavior remains pending.
 - Defects discovered during any manual execution must be recorded separately with reproduction steps, resolution, and retest evidence.
