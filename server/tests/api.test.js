@@ -1346,6 +1346,125 @@ test('SEC-05-04: Failed validation and authorization requests leave database unc
   assert.strictEqual(db.prepare('SELECT COUNT(*) AS count FROM events').get().count, before.events);
 });
 
+test('NFR-07: Layered auth, user, and admin endpoints preserve their API behavior', async () => {
+  const adminLogin = await request('POST', '/api/auth/login', {
+    email: 'admin@ems.com',
+    password: 'Admin@123'
+  });
+  assert.strictEqual(adminLogin.status, 200);
+  const adminToken = adminLogin.body.token;
+
+  const overview = await request('GET', '/api/admin/overview', null, adminToken);
+  assert.strictEqual(overview.status, 200);
+  assert.deepStrictEqual(Object.keys(overview.body).sort(), [
+    'totalEvents',
+    'totalOrganizers',
+    'totalRegistrations',
+    'totalUsers'
+  ].sort());
+
+  const users = await request('GET', '/api/admin/users', null, adminToken);
+  assert.strictEqual(users.status, 200);
+  assert.ok(users.body.users.every(user =>
+    Object.hasOwn(user, 'active_registrations') &&
+    Object.hasOwn(user, 'events_created')
+  ));
+
+  const events = await request('GET', '/api/admin/events', null, adminToken);
+  assert.strictEqual(events.status, 200);
+  assert.ok(events.body.events.every(event =>
+    Object.hasOwn(event, 'confirmed_count') &&
+    Object.hasOwn(event, 'cancelled_count')
+  ));
+
+  const reports = await request('GET', '/api/admin/reports', null, adminToken);
+  assert.strictEqual(reports.status, 200);
+  assert.ok(reports.body.report.every(report =>
+    typeof report.occupancy_rate === 'number'
+  ));
+
+  const organizerLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+  assert.strictEqual(organizerLogin.status, 200);
+  const organizedEvents = await request(
+    'GET',
+    '/api/users/me/organized',
+    null,
+    organizerLogin.body.token
+  );
+  assert.strictEqual(organizedEvents.status, 200);
+  assert.ok(Array.isArray(organizedEvents.body.events));
+  assert.ok(organizedEvents.body.events.every(event =>
+    Object.hasOwn(event, 'registered_count')
+  ));
+
+  const uniqueEmail = `nfr07_suspended_${Date.now()}@example.com`;
+  let suspendedUserId;
+  try {
+    const registration = await request('POST', '/api/auth/register', {
+      name: 'NFR-07 Suspended User',
+      email: uniqueEmail,
+      password: 'Password123'
+    });
+    assert.strictEqual(registration.status, 201);
+    suspendedUserId = registration.body.user.id;
+
+    const roleUpdate = await request(
+      'PATCH',
+      `/api/admin/users/${suspendedUserId}/role`,
+      { role: 'organizer' },
+      adminToken
+    );
+    assert.strictEqual(roleUpdate.status, 200);
+
+    const suspend = await request(
+      'PATCH',
+      `/api/admin/users/${suspendedUserId}/status`,
+      { status: 'suspended' },
+      adminToken
+    );
+    assert.strictEqual(suspend.status, 200);
+    assert.strictEqual(suspend.body.message, 'User status changed to suspended.');
+
+    const auditEntries = db.prepare(`
+      SELECT action, target_id
+      FROM admin_audit_log
+      WHERE admin_user_id = ? AND target_id = ?
+      ORDER BY id DESC
+      LIMIT 2
+    `).all(adminLogin.body.user.id, suspendedUserId);
+    assert.deepStrictEqual(auditEntries, [
+      { action: 'PATCH /api/admin/users/:id/status', target_id: suspendedUserId },
+      { action: 'PATCH /api/admin/users/:id/role', target_id: suspendedUserId }
+    ]);
+
+    const suspendedLogin = await request('POST', '/api/auth/login', {
+      email: uniqueEmail,
+      password: 'Password123'
+    });
+    assert.strictEqual(suspendedLogin.status, 403);
+    assert.strictEqual(
+      suspendedLogin.body.error,
+      'Your account has been suspended by an administrator.'
+    );
+
+    const selfSuspend = await request(
+      'PATCH',
+      `/api/admin/users/${adminLogin.body.user.id}/status`,
+      { status: 'suspended' },
+      adminToken
+    );
+    assert.strictEqual(selfSuspend.status, 400);
+    assert.strictEqual(selfSuspend.body.error, 'Admin cannot suspend their own account.');
+  } finally {
+    if (suspendedUserId) {
+      db.prepare('DELETE FROM users WHERE id = ?').run(suspendedUserId);
+    }
+  }
+});
+
 // --- FR-10: Organizer Registration Reports Generation ---
 
 test('FR-10-01: Event owner successfully retrieves a registration report', async () => {
