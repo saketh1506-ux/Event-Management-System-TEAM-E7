@@ -220,6 +220,8 @@ test('FR-02: Event listing preserves search, category, date, status, organizer, 
     const active = listing.body.events.find(event => event.id === activeId);
     assert.strictEqual(active.organizer_name, 'Saketh Narayanam');
     assert.strictEqual(active.organizer_email, 'organizer@ems.com');
+    assert.strictEqual(active.description, 'Layered filter description');
+    assert.ok(active.created_at);
     assert.strictEqual(active.registered_count, 1);
     assert.strictEqual(active.spots_left, 1);
     assert.strictEqual(active.is_full, false);
@@ -231,6 +233,15 @@ test('FR-02: Event listing preserves search, category, date, status, organizer, 
 
     const category = await request('GET', `/api/events?category=Technology&search=${encodeURIComponent(`Layered Search ${suffix}`)}`);
     assert.deepStrictEqual(category.body.events.map(event => event.id), [activeId]);
+
+    const shortSearch = await request('GET', `/api/events?category=Technology&search=${suffix.toString().slice(0, 2)}`);
+    assert.deepStrictEqual(shortSearch.body.events.map(event => event.id), [activeId]);
+
+    const locationSearch = await request('GET', `/api/events?search=${encodeURIComponent(`Layered Hall ${suffix}`)}`);
+    assert.deepStrictEqual(locationSearch.body.events.map(event => event.id), [activeId]);
+
+    const wildcardSearch = await request('GET', `/api/events?search=${encodeURIComponent(`Layered_Hall ${suffix}`)}`);
+    assert.deepStrictEqual(wildcardSearch.body.events.map(event => event.id), [activeId]);
 
     const date = await request('GET', `/api/events?date=2026-12-31&search=${encodeURIComponent(`Layered Search ${suffix}`)}`);
     assert.deepStrictEqual(date.body.events.map(event => event.id), [cancelledId, descriptionId]);
