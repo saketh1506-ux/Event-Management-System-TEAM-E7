@@ -43,6 +43,48 @@ function initDb() {
     );
   `);
 
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_events_date_time
+    ON events(date, time);
+
+    CREATE INDEX IF NOT EXISTS idx_events_category_date_time
+    ON events(category, date, time);
+  `);
+
+  const hasEventSearchIndex = Boolean(db.prepare(`
+    SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'events_fts'
+  `).get());
+  db.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(
+      title,
+      description,
+      location,
+      content = 'events',
+      content_rowid = 'id',
+      tokenize = 'trigram'
+    );
+
+    CREATE TRIGGER IF NOT EXISTS events_fts_insert AFTER INSERT ON events BEGIN
+      INSERT INTO events_fts(rowid, title, description, location)
+      VALUES (new.id, new.title, new.description, new.location);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS events_fts_delete AFTER DELETE ON events BEGIN
+      INSERT INTO events_fts(events_fts, rowid, title, description, location)
+      VALUES ('delete', old.id, old.title, old.description, old.location);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS events_fts_update AFTER UPDATE ON events BEGIN
+      INSERT INTO events_fts(events_fts, rowid, title, description, location)
+      VALUES ('delete', old.id, old.title, old.description, old.location);
+      INSERT INTO events_fts(rowid, title, description, location)
+      VALUES (new.id, new.title, new.description, new.location);
+    END;
+  `);
+  if (!hasEventSearchIndex) {
+    db.exec("INSERT INTO events_fts(events_fts) VALUES ('rebuild')");
+  }
+
   // Registrations table
   db.exec(`
     CREATE TABLE IF NOT EXISTS registrations (
