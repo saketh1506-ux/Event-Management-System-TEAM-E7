@@ -1,3 +1,4 @@
+
 const adminModel = require('../models/adminModel');
 
 function createError(status, message) {
@@ -14,12 +15,18 @@ function getUsers() {
   return adminModel.findUsers();
 }
 
-function updateUserRole(userId, role) {
+function updateUserRole(userId, role, actingUserId) {
   if (!['user', 'organizer', 'admin'].includes(role)) {
     throw createError(400, 'Invalid role specified.');
   }
 
+  // Prevent administrators from demoting their own account
+  if (Number(userId) === Number(actingUserId) && role !== 'admin') {
+    throw createError(400, 'Admin cannot demote their own account.');
+  }
+
   const changes = adminModel.updateUserRole(userId, role);
+
   if (changes === 0) {
     throw createError(404, 'User not found.');
   }
@@ -37,6 +44,7 @@ function updateUserStatus(userId, status, actingUserId) {
   }
 
   const changes = adminModel.updateUserStatus(userId, status);
+
   if (changes === 0) {
     throw createError(404, 'User not found.');
   }
