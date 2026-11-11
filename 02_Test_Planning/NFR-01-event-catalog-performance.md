@@ -1,3 +1,4 @@
+
 # NFR-01 Event Catalog Performance
 
 ## Benchmark conditions
@@ -39,4 +40,4 @@ The benchmark prints `EXPLAIN QUERY PLAN` output for the catalog query, includin
 
 Ordinary B-tree indexes do not accelerate the existing contains-search pattern (`LIKE '%term%'`). The FTS5 trigram index applies the same `LIKE` behavior and is synchronized by event insert/update/delete triggers; existing event rows are indexed on first initialization. Patterns without a run of three literal characters retain the original direct-`LIKE` query path.
 
-The listing projection omits unused `created_at` while retaining the event fields used by the client and tests, including description and organizer email. Confirmed-registration counting, existing filters, ordering, and client/test-required response fields remain intact.
+The event catalog listing preserves the response fields required by the client and automated API tests, including `created_at`, description, and organizer email. Confirmed-registration counting, existing filters, date/time ordering, and client/test-required response fields remain intact. The performance improvements use optimized query execution and indexes without intentionally removing these API response fields.
