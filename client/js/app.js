@@ -934,7 +934,7 @@ class App {
           <td><strong>${this.escapeHtml(u.name)}</strong></td>
           <td>${this.escapeHtml(u.email)}</td>
           <td>
-            <select class="form-control" style="padding: 0.3rem; font-size: 0.85rem;" onchange="app.changeUserRole(${u.id}, this.value)">
+            <select class="form-control" aria-label="Role for ${this.escapeHtml(u.name)}" style="padding: 0.3rem; font-size: 0.85rem;" onchange="app.changeUserRole(${u.id}, this.value)">
               <option value="user" ${u.role === 'user' ? 'selected' : ''}>Attendee (user)</option>
               <option value="organizer" ${u.role === 'organizer' ? 'selected' : ''}>Organizer</option>
               <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
@@ -1099,6 +1099,8 @@ class App {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
+    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+    toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
 
     let icon = 'info-circle';
     if (type === 'success') icon = 'circle-check';

@@ -3,29 +3,33 @@
 
 ## Test environment and execution
 
-**Test environment:** Node.js backend API suite on Windows, using an isolated temporary SQLite database.
+**Test environment:** Windows 11 (build 26200), Node.js 22.23.4, isolated temporary SQLite database.
 
-**Automated test command:**
+**Automated test commands:**
 
 ```powershell
 cd server
-node --test tests/api.test.js
+npm test
+npm run test:e2e
 ```
 
-**Latest execution result (11 November 2026):**
+**Latest execution result (12 November 2026):**
 
-- Total tests: 68
-- Passed: 68
+- Backend tests: 72
+- Playwright browser tests: 22
+- Total tests: 94
+- Passed: 94
 - Failed: 0
 - Cancelled: 0
 - Skipped: 0
-- Duration: approximately 18.45 seconds
+- Backend duration: 13.51 seconds
+- Playwright duration: 53.7 seconds
 
-**Overall automated backend status: PASS**
+**Overall automated test status: PASS**
 
-The backend suite covers authentication, authorization, event management, registration, transaction consistency, input validation, administration, and security boundary conditions.
+The backend suite covers authentication, authorization, event management, registration, transaction consistency, input validation, administration, and security boundaries. Playwright exercises application workflows in Chromium and Firefox, including responsive viewports and keyboard-accessibility behavior.
 
-Browser end-to-end execution, responsive-interface inspection, and performance benchmarking are documented separately. API test results alone do not establish browser compatibility.
+Performance and dependency-audit measurements are recorded in the project-wide audit report and the NFR benchmark reports.
 
 ## TC-01 to TC-18 coverage
 
@@ -40,13 +44,13 @@ Browser end-to-end execution, responsive-interface inspection, and performance b
 | TC-07 | Cancel a registration and maintain consistent capacity. | `TC-04, TC-06, TC-07`; `TC-07A` | Cancellation and subsequent re-registration passed. | PASS |
 | TC-08 | Allow authorized organizers to create events with defined capacities. | `TC-08: Organizer creates event and sets capacity` | Authorized event creation passed. | PASS |
 | TC-09 | Prevent normal attendees from accessing administrator endpoints. | `TC-09`; `SEC-05-04` | Unauthorized administration requests were rejected without unintended database changes. | PASS |
-| TC-10 | Complete event registration within two seconds under the measured conditions. | Separate registration benchmark | Five sequential registrations averaged 3.79 ms; maximum 9.25 ms. | PASS for measured workload |
+| TC-10 | Complete event registration within two seconds under the measured conditions. | `npm run benchmark:registration` | 60 concurrent registrations: p95 19.23 ms, maximum 22.91 ms; duplicate p95 22.63 ms. | PASS for measured workload |
 | TC-11 | Store passwords securely rather than in plaintext. | `SEC-05-01`; `SEC-01-01`; `SEC-01-02` | bcrypt password hashing and salting checks passed. | PASS |
-| TC-12 | Maintain usable responsive layouts across devices and browsers. | Responsive implementation and recorded Edge inspections | Edge mobile at 375px and desktop layout inspected; full browser/viewport matrix not established by this report. | PARTIALLY VERIFIED |
+| TC-12 | Maintain usable responsive layouts across devices and browsers. | Playwright `RESP-375`, `RESP-768`, `RESP-1440` in Chromium and Firefox | Responsive interactions and overflow checks passed at 375px, 768px, and 1440px in both engines; screenshots recorded. | PASS for tested matrix |
 | TC-13 | Maintain registration and capacity consistency through repeated operations. | Registration lifecycle and NFR-06 transaction tests | Registration, cancellation, rollback, and concurrency checks passed. | PASS |
-| TC-14 | Separate application functionality into maintainable architectural modules. | Architecture review checklist | Project structure identified; formal review findings not yet recorded. | PENDING REVIEW |
+| TC-14 | Separate application functionality into maintainable architectural modules. | Architecture review below; source inspection and 72 backend/22 browser tests | Layer boundaries and test database isolation verified; frontend remains a single App class with inline event handlers. | PASS with maintainability note |
 | TC-15 | Allow event owners to retrieve participant reports while denying unauthorized access. | `FR-10-01` through `FR-10-08` | Ownership authorization, occupancy calculations, and CSV export checks passed. | PASS |
-| TC-16 | Reject malicious input and prevent expired or revoked sessions from accessing protected APIs. | `SEC-03`; `SEC-04`; `SEC-05` | Backend security tests passed; browser-level re-authentication verification not recorded. | PARTIALLY VERIFIED |
+| TC-16 | Reject malicious input and prevent expired or revoked sessions from accessing protected APIs. | `SEC-03`; `SEC-04`; `SEC-05`; Playwright `E2E-07` | Invalid, expired, revoked, suspended-account and database-failure sessions were checked; browser expiry handling passed in both engines. | PASS for tested cases |
 | TC-17 | Allow authorized organizers to publish updates for registered attendees. | `FR-09-01` through `FR-09-07` | Update publishing, authorization, and attendee retrieval passed. | PASS |
 | TC-18 | Allow administrators to manage users/events while enforcing role restrictions. | `SEC-05-03`; `SEC-05-05`; administration API tests | Role management, access restrictions, and self-demotion protection passed. | PASS |
 
@@ -59,8 +63,12 @@ The latest backend test run includes the following additional cases.
 | SEC-01-03 | Reject passwords exceeding bcrypt's 72-byte limit. | PASS |
 | SEC-01-04 | Reject Unicode passwords exceeding 72 UTF-8 bytes. | PASS |
 | SEC-01-05 | Accept passwords exactly 72 bytes long. | PASS |
+| SEC-01-06 | Reject missing credentials and passwords exceeding 72 UTF-8 bytes. | PASS |
 | NFR-06-02 | Prevent duplicate registrations during concurrent re-registration after cancellation. | PASS |
 | SEC-05-05 | Prevent an administrator from demoting their own account. | PASS |
+| SEC-04-07 | Apply role and suspension changes to existing tokens. | PASS |
+| SEC-04-08 | Fail closed when the token-revocation database is unavailable. | PASS |
+| SEC-03-11 | Return HTTP 413 for a request body over the JSON parser limit. | PASS |
 
 ### Password boundary verification
 
@@ -95,48 +103,16 @@ The test confirms:
 
 ## TC-10: Registration response-time benchmark
 
-### Test setup
-
-- Event: `Tech Innovators Summit 2026`
-- Event ID: `1`
-- Event capacity: `50`
-- Database: Fresh temporary SQLite database selected through `DATABASE_PATH`
-- Initial confirmed registrations: `0`
-- Five independent attendee accounts were created and authenticated.
-- Registration requests were sent sequentially.
-
-### Measurement method
-
-1. Create a test event and five attendee accounts.
-2. Authenticate each attendee independently.
-3. Send `POST /api/events/1/register` with each attendee's bearer token.
-4. Measure the HTTP request duration through receipt of the response.
-5. Verify HTTP 201 and confirmed registration status.
-6. Calculate average and maximum response times.
-7. Verify the final confirmed registration count.
-
 ### Recorded results
 
-| Attendee | Endpoint | Status | Response time |
-|---|---|---|---:|
-| 1 | `POST /api/events/1/register` | HTTP 201 | 9.25 ms |
-| 2 | `POST /api/events/1/register` | HTTP 201 | 2.51 ms |
-| 3 | `POST /api/events/1/register` | HTTP 201 | 3.09 ms |
-| 4 | `POST /api/events/1/register` | HTTP 201 | 2.08 ms |
-| 5 | `POST /api/events/1/register` | HTTP 201 | 2.04 ms |
+The latest `npm run benchmark:registration` run used an isolated temporary database, 60 distinct attendees, capacity 80, and concurrency 10.
 
-**Benchmark summary:**
+| Scenario | Requests | Average | Median | p95 | Maximum | Throughput |
+|---|---:|---:|---:|---:|---:|---:|
+| Successful registration | 60 | 15.77 ms | 15.49 ms | 19.23 ms | 22.91 ms | 579.85 req/s |
+| Duplicate registration | 60 | 14.88 ms | 14.03 ms | 22.63 ms | 23.37 ms | — |
 
-- Successful requests: 5
-- Final confirmed registrations: 5
-- Average response time: 3.79 ms
-- Maximum response time: 9.25 ms
-- Required threshold: Less than 2000 ms
-- Result: PASS
-
-All five measured requests completed below the threshold.
-
-This benchmark represents local sequential registration requests. It does not establish concurrent-load performance or production network latency.
+Both scenarios were below the 2,000 ms response-time target. Measurements are local loopback results and do not establish production network latency.
 
 ## TC-12: Responsive design and browser compatibility
 
@@ -154,22 +130,13 @@ The project documentation records the following responsive and accessibility fea
 - Keyboard navigation, focus handling, and Escape-key closing.
 - Visible keyboard-focus indicators.
 
-### Recorded manual verification
-
-The existing validation record documents:
-
-- Microsoft Edge at a 375px mobile viewport: manually inspected.
-- Microsoft Edge desktop layout: manually inspected, with exact width unspecified.
-
-Additional frontend automated and cross-browser testing should be referenced through its actual test reports and execution evidence. This report does not assume that all browser/viewport combinations passed without those results.
-
 ### Browser verification matrix
 
-| Browser | Desktop | Tablet | Mobile |
+| Browser | Desktop (1440px) | Tablet (768px) | Mobile (375px) |
 |---|---|---|---|
-| Chrome | Evidence to be reconciled | Evidence to be reconciled | Evidence to be reconciled |
-| Microsoft Edge | Previously inspected | Not established here | 375px previously inspected |
-| Firefox | Evidence to be reconciled | Evidence to be reconciled | Evidence to be reconciled |
+| Chromium / Chrome for Testing 158.0.8127.18 | PASS | PASS | PASS |
+| Firefox 159.0 | PASS | PASS | PASS |
+| Microsoft Edge | Not run | Not run | Historical manual inspection only |
 
 ### Responsive inspection checklist
 
@@ -186,36 +153,38 @@ For each selected browser and viewport, verify:
 - Modal dialogs fit the viewport.
 - Keyboard interaction works as expected.
 
-**TC-12 status: PARTIALLY VERIFIED based on the evidence recorded in this report.**
+Screenshots are stored under [`evidence/`](evidence/): `catalog-{chromium,firefox}-{375,768,1440}.png`, `organizer-dashboard-{chromium,firefox}.png`, and `admin-dashboard-{chromium,firefox}.png`.
+
+**TC-12 status: PASS for the tested Chromium/Firefox viewport matrix. Edge was not run in this audit.**
 
 ## TC-14: Architecture review
 
 ### Review metadata
 
-- Reviewer: To be recorded
-- Review date: To be recorded
-- Reviewed commit: To be recorded
-- Overall finding: Pending formal review
+- Reviewer: Repository source and test evidence review
+- Review date: 12 November 2026
+- Scope: Current worktree; no commit was created for this review.
+- Overall finding: Layered backend responsibilities are evident and covered by tests. Frontend responsibilities are separated by file, but UI logic is concentrated in one `App` class and uses inline event handlers.
 
 ### Architecture components to review
 
 | Component | Project path | Review status |
 |---|---|---|
-| Application entry point | `server/server.js` | Pending |
-| Database initialization | `server/db.js` | Pending |
-| Authentication middleware | `server/middleware/auth.js` | Pending |
-| Authentication routes | `server/routes/auth.js` | Pending |
-| Event routes | `server/routes/events.js` | Pending |
-| User routes | `server/routes/users.js` | Pending |
-| Administration routes | `server/routes/admin.js` | Pending |
-| Controllers | `server/controllers/` | Pending |
-| Services | `server/services/` | Pending |
-| Models | `server/models/` | Pending |
-| API tests | `server/tests/api.test.js` | Pending |
-| Client markup | `client/index.html` | Pending |
-| Client application logic | `client/js/app.js` | Pending |
-| Client styling | `client/css/style.css` | Pending |
-| CI workflow | `.github/workflows/api-tests.yml` | Pending |
+| Application entry point | `server/server.js` | PASS: middleware, routing, static hosting, and error handling are composed here. |
+| Database initialization | `server/db.js` | PASS: SQLite schema, constraints, indexes, FTS triggers, and opt-in seed data are initialized separately. |
+| Authentication middleware | `server/middleware/auth.js` | PASS after fix: tokens are checked against revocation and current active account state. |
+| Authentication routes | `server/routes/auth.js` | PASS: routes delegate to controller and validation middleware. |
+| Event routes | `server/routes/events.js` | PASS: route-level authentication, role gates, ID validation, and payload validation are explicit. |
+| User routes | `server/routes/users.js` | PASS: protected endpoints are routed through authentication. |
+| Administration routes | `server/routes/admin.js` | PASS: authentication and administrator authorization are applied to the router. |
+| Controllers | `server/controllers/` | PASS: HTTP responses delegate domain behavior to services. |
+| Services | `server/services/` | PASS: event, account, and admin rules are separate from SQL access. |
+| Models | `server/models/` | PASS: database reads and writes are encapsulated in model modules. |
+| API tests | `server/tests/api.test.js` | PASS: temporary SQLite database, transactional capacity checks, lifecycle and rollback tests. |
+| Client markup | `client/index.html` | PASS: page structure and dialogs are separate from stylesheet and application code. |
+| Client application logic | `client/js/app.js` | PARTIAL: responsibilities are grouped in one `App` class; inline handlers couple markup to the global `app` instance. |
+| Client styling | `client/css/style.css` | PASS: responsive layouts and focus styles are in a separate stylesheet. |
+| CI workflow | `.github/workflows/api-tests.yml` | PASS: API tests and Chromium/Firefox Playwright tests are configured; remote CI execution was not performed in this audit. |
 
 ### Architecture review checklist
 
@@ -232,9 +201,9 @@ Verify that:
 9. No unnecessary duplicate implementations or cross-layer dependencies remain.
 10. The implemented architecture matches documented responsibilities.
 
-The passing API tests support behavioural correctness but do not replace a formal architecture review.
+The checklist was verified by reading the actual route/controller/service/model/client files and by running the isolated backend and browser suites. No module rewrite was warranted.
 
-**TC-14 status: PENDING REVIEW.**
+**TC-14 status: PASS with the frontend maintainability note above.**
 
 ## TC-16: Security and session verification
 
@@ -255,24 +224,17 @@ The automated suite verifies:
 
 ### Browser-level verification
 
-The browser-level session checklist includes:
+Playwright `E2E-02` verified login/logout and `E2E-07` verified that a locally stored invalid/expired token is cleared and the user is returned to the signed-out state in Chromium and Firefox. Backend `SEC-04-07` verifies that current role/suspension state is enforced for existing tokens; `SEC-04-08` verifies the revocation lookup fails closed.
 
-1. Log in using a valid account.
-2. Open a protected workflow.
-3. Log out.
-4. Attempt to access a protected workflow again.
-5. Confirm that protected actions are rejected or re-authentication is required.
-6. Confirm that protected information is not incorrectly exposed after session expiry.
-
-The backend security checks passed. Browser-level session-expiration evidence is not established by this report.
-
-**TC-16 status: PARTIALLY VERIFIED.**
+**TC-16 status: PASS for tested API and browser cases.**
 
 ## Issue acceptance assessment
 
 ### Completed verification
 
-- The complete backend suite passed: 68/68 tests.
+- The complete backend suite passed: 72/72 tests.
+- The Playwright suite passed: 22/22 tests across Chromium and Firefox.
+- The 375px, 768px, and 1440px responsive matrix passed in both browsers.
 - Authentication and password boundary checks passed.
 - Registration lifecycle and concurrency checks passed.
 - Transaction rollback consistency checks passed.
@@ -283,18 +245,18 @@ The backend security checks passed. Browser-level session-expiration evidence is
 
 ### Remaining documentation or review items
 
-- Reconcile TC-12 with the completed frontend automated and cross-browser testing evidence.
-- Complete and record the TC-14 architecture review.
-- Record browser-level session-expiration and re-authentication evidence for TC-16 if required for full acceptance.
+- Microsoft Edge was not executed in this audit; its prior manual note is historical and not part of the current browser pass.
+- GitHub Actions was updated to run Playwright, but the remote workflow was not triggered here.
+- Two moderate npm audit advisories remain in the development-only `nodemon` dependency chain; production dependencies audit cleanly.
 
 ## Overall recommendation
 
-The Event Management System backend has successfully completed its latest automated verification run with **68 tests passed, 0 failed, and 0 skipped**.
+The Event Management System completed **94 automated checks: 72 backend tests and 22 Chromium/Firefox UI tests, all passing**.
 
 The additional backend boundary tests verify password-length restrictions, concurrent re-registration consistency, and administrator self-demotion protection.
 
 The recorded registration benchmark also meets its stated performance threshold.
 
-The automated backend verification is ready for review. Full acceptance of all 18 test cases should additionally account for the outstanding architecture review and any manual browser evidence not yet incorporated into this report.
+The measured registration benchmark met its under-two-second target. TC-12, TC-14, and TC-16 now have automated or source-review evidence for the stated scope; Microsoft Edge and remote CI execution remain unverified.
 
-**Final backend automated testing status: PASS (68/68).**
+**Final automated testing status: PASS (94/94).**

@@ -6,7 +6,7 @@ Registration processing must complete in under 2 seconds while preserving duplic
 
 ## Test Conditions
 
-- API: local Express server on `127.0.0.1:5000`
+- API: local Express server on an available `127.0.0.1` port
 - Database: isolated temporary SQLite database
 - Successful registrations: 60
 - Concurrent worker level: 10
@@ -17,11 +17,11 @@ Registration processing must complete in under 2 seconds while preserving duplic
 
 ## Reproduction
 
-Use Node.js 18 or newer, because the benchmark uses the built-in Fetch API. Install the server dependencies before running it:
+Use Node.js 18 or newer, because the benchmark uses the built-in Fetch API. Install the locked server dependencies before running it:
 
 ```powershell
 cd server
-npm install
+npm ci
 ```
 
 The benchmark creates an isolated temporary directory below the operating system temporary directory and places `benchmark.sqlite` inside it. It chooses an available loopback port, starts `server/server.js` as a child process with production mode, sets `EMS_DATABASE_PATH` to the temporary database and points the benchmark at the child server.
@@ -73,7 +73,7 @@ Added an index on `(event_id, status)` to support confirmed-registration counts 
 
 The registration route and transaction boundaries were not rewritten because the baseline target was already satisfied and the existing atomic implementation was correct.
 
-## Before/After Comparison
+## Historical Before/After Comparison
 
 | Metric | Before | After | Change |
 |---|---:|---:|---:|
@@ -87,11 +87,26 @@ The optimized duplicate-registration condition measured 13.69 ms average, 16.10 
 
 The under-2-second target was achieved in both baseline and optimized measurements. The optimized maximum response time remained 29.41 ms for successful registrations.
 
+## Audit rerun (12 November 2026)
+
+Environment: Windows 11 build 26200, Node.js 22.23.4, 60 distinct attendees, capacity 80, concurrency 10, isolated temporary SQLite database.
+
+| Metric | Successful registrations | Duplicate registrations |
+|---|---:|---:|
+| Average | 15.77 ms | 14.88 ms |
+| Median | 15.49 ms | 14.03 ms |
+| p95 | 19.23 ms | 22.63 ms |
+| Maximum | 22.91 ms | 23.37 ms |
+
+Successful-registration throughput was 579.85 requests/second. Both measured p95 values met the under-2-second target. This concurrent run is not directly comparable to the prior recorded measurements.
+
+The first audit attempt exposed that the benchmark launched its production-mode server without `JWT_SECRET`, causing startup to fail. The benchmark now supplies an isolated benchmark-only secret; the rerun completed and emitted the measurements above.
+
 ## Test Results
 
-- Baseline API suite: 45 passed, 0 failed
-- Optimized API suite: 45 passed, 0 failed
-- Suite duration optimized run: 8.788 seconds
+- Historical baseline API suite: 45 passed, 0 failed
+- Current project audit API suite: 72 passed, 0 failed
+- Current API suite duration: 13.51 seconds
 - Existing concurrent capacity test passed.
 - Existing duplicate registration, cancellation, full-event and re-registration coverage passed.
 - Existing FR-06, FR-09, FR-10, SEC-04 and SEC-05 tests passed with the complete suite.
