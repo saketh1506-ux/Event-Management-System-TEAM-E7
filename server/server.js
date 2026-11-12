@@ -21,6 +21,9 @@ app.use((err, req, res, next) => {
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
     return res.status(400).json({ error: 'Invalid JSON payload.' });
   }
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Request body too large.' });
+  }
   next(err);
 });
 

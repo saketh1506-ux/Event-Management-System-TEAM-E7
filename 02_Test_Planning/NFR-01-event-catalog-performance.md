@@ -23,11 +23,13 @@ Baseline was captured before changing the event query or adding event indexes. T
 | Scenario | Version | Average | Median | p95 | Maximum | p95 target |
 |---|---|---:|---:|---:|---:|---|
 | Unfiltered catalog (5,000 events) | Baseline | 722.00 ms | 814.78 ms | 940.55 ms | 954.24 ms | Met |
-| Unfiltered catalog (5,000 events) | Final | 484.97 ms | 555.90 ms | 623.66 ms | 640.90 ms | Met |
+| Unfiltered catalog (5,000 events) | Previously recorded final | 484.97 ms | 555.90 ms | 623.66 ms | 640.90 ms | Met |
 | Substring search (111 events) | Baseline | 73.50 ms | 80.74 ms | 93.15 ms | 93.84 ms | Met |
-| Substring search (111 events) | Final | 32.00 ms | 34.04 ms | 46.08 ms | 46.96 ms | Met |
+| Substring search (111 events) | Previously recorded final | 32.00 ms | 34.04 ms | 46.08 ms | 46.96 ms | Met |
+| Unfiltered catalog (5,000 events) | Audit rerun (12 Nov 2026) | 542.23 ms | 611.88 ms | 647.07 ms | 668.09 ms | Met |
+| Substring search (111 events) | Audit rerun (12 Nov 2026) | 34.93 ms | 37.88 ms | 43.02 ms | 45.51 ms | Met |
 
-Both final p95 measurements are below the 3-second target for the stated workload.
+Both audit-rerun p95 measurements are below the 3-second target for the stated workload. The rerun is a separate local measurement, not a statistically controlled comparison with the earlier run.
 
 ## Query-plan verification
 
@@ -40,4 +42,10 @@ The benchmark prints `EXPLAIN QUERY PLAN` output for the catalog query, includin
 
 Ordinary B-tree indexes do not accelerate the existing contains-search pattern (`LIKE '%term%'`). The FTS5 trigram index applies the same `LIKE` behavior and is synchronized by event insert/update/delete triggers; existing event rows are indexed on first initialization. Patterns without a run of three literal characters retain the original direct-`LIKE` query path.
 
-The event catalog listing preserves the response fields required by the client and automated API tests, including `created_at`, description, and organizer email. Confirmed-registration counting, existing filters, date/time ordering, and client/test-required response fields remain intact. The performance improvements use optimized query execution and indexes without intentionally removing these API response fields.
+### `created_at` schema and query behavior
+
+`server/db.js` declares `events.created_at` as `DATETIME DEFAULT CURRENT_TIMESTAMP`. Event creation in `server/models/eventModel.js` omits this field from its `INSERT`, so SQLite supplies the insertion timestamp (UTC text in `YYYY-MM-DD HH:MM:SS` form). The event catalog model selects `e.created_at` directly; it does not calculate the value or use it for catalog filtering or ordering. Detail and organizer queries that select `e.*` also return the stored field. The admin event list separately orders by `e.created_at DESC`.
+
+The API test `FR-02: Event listing preserves search, category, date, status, organizer, and capacity fields` verifies that the catalog response contains a nonempty `created_at`. `CREATE TABLE IF NOT EXISTS` initializes this column for new databases; it is not itself a migration that adds the column to an older pre-existing database schema.
+
+The event catalog listing also preserves description, organizer email, confirmed-registration counting, existing filters, and date/time ordering. The benchmark changes query execution and indexes without intentionally removing response fields.
