@@ -4,7 +4,7 @@
 
 **Title:** Event creation and updates accepted impossible calendar dates  
 **Date discovered:** November 5, 2026  
-**Status:** Fix implemented; full API retesting pending
+**Status:** Fix implemented and API regression test passed
 
 ## Affected files
 
@@ -75,10 +75,9 @@ The test also captures the existing event before each invalid update and asserts
 - **Passed - syntax checks:** `node --check` passed for both changed JavaScript files.
 - **Passed - isolated schema checks:** The three impossible dates were rejected and the two valid dates were accepted for both create and update schemas.
 - **Passed - diff check:** `git diff --check` reported no whitespace errors.
-- **Not run to completion - full API suite:** The test runner could not load `jsonwebtoken` because server dependencies were missing. Restoring dependencies with `npm ci` then failed while building `better-sqlite3`: no prebuilt binary was available for the installed Node.js 26.13.0 runtime, and Visual Studio C++ build tools were unavailable.
-- **Pending - API regression test:** The API test covering create/update requests and the unchanged-event assertion has not run end-to-end.
+- **Passed - API regression test:** `npm test` from `server/` passed all 72 tests on Node.js 22.23.4 / npm 10.9.9. The run included the HTTP create/update date test and its unchanged-event assertion. The test command completed with 72 passed and 0 failed.
 
 ## Retest status
 
-**Full API retesting is pending.** The schema checks do not substitute for running the database-backed API regression test. The regression test must be run in an environment with compatible dependencies and a supported/buildable `better-sqlite3` runtime before recording API-level pass results.
+**API retesting passed** in the environment above. The earlier dependency/runtime limitation no longer applies to this run.
 

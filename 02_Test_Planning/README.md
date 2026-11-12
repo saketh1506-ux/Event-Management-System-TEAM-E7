@@ -2,8 +2,19 @@
 
 Purpose: Test strategy, test cases, and validation results.
 
-## Missing deliverables
+## Available evidence
 
-- Project-wide test results and browser evidence: [`Project_Wide_Testing_Audit_Report.md`](Project_Wide_Testing_Audit_Report.md).
-- To rerun the API suite and benchmarks, use `npm test`, `npm run benchmark:registration`, and `npm run benchmark:event-catalog` from `server`.
-- To install Playwright's browser engines and run cross-browser UI tests, use `npx playwright install chromium firefox` and `npm run test:e2e` from `server`.
+- [`Project_Wide_Testing_Audit_Report.md`](Project_Wide_Testing_Audit_Report.md) records test results, security findings, performance measurements, browser versions, limitations, and screenshot evidence.
+- [`evidence/`](evidence/) contains Chromium/Firefox screenshots for mobile, tablet, desktop, organizer, and administrator views.
+
+## Rerun commands
+
+From `server`:
+
+```powershell
+npm test
+npm run benchmark:registration
+npm run benchmark:event-catalog
+npx playwright install chromium firefox
+npm run test:e2e
+```

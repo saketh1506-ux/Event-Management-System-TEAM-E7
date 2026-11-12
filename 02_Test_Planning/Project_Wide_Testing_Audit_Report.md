@@ -39,8 +39,8 @@ Run commands from `server` unless noted otherwise.
 | Command | Expected result | Actual result | Status |
 |---|---|---|---|
 | `npm test` (before changes) | Existing suite passes | 68 passed, 0 failed; 16.35 s | PASS |
-| `npm test` (final) | All backend tests pass | 72 passed, 0 failed; 13.51 s | PASS |
-| `npm run test:e2e` (final) | Chromium and Firefox workflows pass | 22 passed, 0 failed; 53.7 s | PASS |
+| `npm test` (final) | All backend tests pass | 72 passed, 0 failed; 13.63 s | PASS |
+| `npm run test:e2e` (final) | Chromium and Firefox workflows pass | 22 passed, 0 failed; 52.9 s | PASS |
 | `npm run benchmark:registration` (final) | p95 below 2,000 ms | Successful p95 19.23 ms; duplicate p95 22.63 ms | PASS |
 | `npm run benchmark:event-catalog` (final) | Catalog p95 below 3,000 ms | Unfiltered p95 647.07 ms; substring-search p95 43.02 ms | PASS |
 | PowerShell `node --check` over `client` and `server`, excluding `node_modules` | All project JavaScript parses | 27 JavaScript files checked | PASS |
@@ -61,7 +61,7 @@ The final `npm test` execution contains the existing 68 API cases plus four regr
 | SEC-04-07 (new) | Apply role changes and suspension to tokens already issued | Promotion/demotion took effect for the same token; suspended token received 401 |
 | SEC-04-08 (new) | Fail closed if revocation storage cannot be read | Valid-token request received generic HTTP 500 rather than bypassing revocation lookup |
 | TC-03, FR-02, FR-03 | Search, filtering, event details and catalog response fields | Search/filter/details passed; `created_at` was present in the event listing |
-| TC-08, FR-07, FR-08 | Create, edit, cancel/delete events; validate fields, dates, capacities and ownership | Expected statuses and ownership checks passed |
+| TC-08, FR-07, FR-08 | Create, edit, cancel/delete events; validate fields, calendar dates, capacities and ownership | Expected statuses and ownership checks passed; impossible dates were rejected for creation and update without mutating the existing event |
 | TC-04 through TC-07, NFR-06 | Registration, duplicate prevention, full capacity, cancellation, re-registration and concurrent operations | Capacity, row uniqueness and registration counts remained consistent; rollback test left no registration |
 | FR-09 | Publish updates and limit update access to owners and registered attendees | Valid updates and access restrictions passed |
 | FR-10, FR-11 | Registration reports, ownership, CSV output and admin moderation | Ownership, counts, formula escaping and missing-resource cases passed |
