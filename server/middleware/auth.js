@@ -13,14 +13,20 @@ function hashToken(token) {
 }
 
 function isTokenRevoked(token) {
-  try {
-    const tokenHash = hashToken(token);
-    const row = db.prepare('SELECT token_hash FROM revoked_tokens WHERE token_hash = ?').get(tokenHash);
-    return !!row;
-  } catch (err) {
-    console.error('Error checking revoked token:', err);
-    return false;
-  }
+  const tokenHash = hashToken(token);
+  const row = db.prepare('SELECT token_hash FROM revoked_tokens WHERE token_hash = ?').get(tokenHash);
+  return !!row;
+}
+
+function findActiveUser(tokenUser) {
+  const account = db.prepare(`
+    SELECT id, name, email, role, status
+    FROM users
+    WHERE id = ?
+  `).get(tokenUser.id);
+
+  if (!account || account.status !== 'active') return null;
+  return { ...tokenUser, ...account };
 }
 
 function revokeToken(token, userId = null, expiresAt = null) {
@@ -52,7 +58,15 @@ function authenticateToken(req, res, next) {
     if (err) {
       return res.status(401).json({ error: 'Invalid or expired token.' });
     }
-    req.user = user;
+    try {
+      const activeUser = findActiveUser(user);
+      if (!activeUser) {
+        return res.status(401).json({ error: 'Account is no longer active. Please log in again.' });
+      }
+      req.user = activeUser;
+    } catch (error) {
+      return next(error);
+    }
     req.token = token;
     next();
   });
@@ -74,8 +88,17 @@ function optionalAuthenticate(req, res, next) {
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (!err && user) {
-      req.user = user;
-      req.token = token;
+      try {
+        const activeUser = findActiveUser(user);
+        if (activeUser) {
+          req.user = activeUser;
+          req.token = token;
+        } else {
+          req.user = null;
+        }
+      } catch (error) {
+        return next(error);
+      }
     } else {
       req.user = null;
     }

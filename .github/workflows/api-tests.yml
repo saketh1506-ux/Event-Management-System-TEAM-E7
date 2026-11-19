@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   ci:
-    name: JavaScript Syntax and API Tests
+    name: JavaScript Syntax, API and Browser Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -40,3 +40,9 @@ jobs:
 
       - name: Run unit and API tests
         run: npm test
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox
+
+      - name: Run cross-browser UI tests
+        run: npm run test:e2e

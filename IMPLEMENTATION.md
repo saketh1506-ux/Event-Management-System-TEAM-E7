@@ -128,44 +128,32 @@ Seeded account emails are `admin@ems.com`, `organizer@ems.com`, `neeraj@ems.com`
 
 ---
 
-## Automated API Testing
+## Automated Testing
 
-**Test file:** `server/tests/api.test.js`
+**Backend test file:** `server/tests/api.test.js`
 
-Run the automated API suite from the `server` directory:
+**Browser test file:** `server/tests/e2e/workflows.spec.js`
 
-```bash
-node --test ./tests/api.test.js
+**Playwright configuration:** `server/playwright.config.js`
+
+From the `server` directory, run:
+
+```powershell
+npm test
+npx playwright install chromium firefox
+npm run test:e2e
 ```
 
-### Previous Recorded Local Test Result
+The API suite uses a temporary SQLite database. Playwright starts the app with its own temporary database and exercises Chromium and Firefox across mobile (375px), tablet (768px), and desktop (1440px) viewports.
 
-This result predates the layered architecture refactor and is retained as historical evidence only.
+### Latest local verification (12 November 2026)
 
-| Metric | Result |
-|---|---:|
-| Total tests | 19 |
-| Passed | 19 |
-| Failed | 0 |
-| Skipped | 0 |
-| Cancelled | 0 |
+| Suite | Passed | Failed |
+|---|---:|---:|
+| Backend API | 72 | 0 |
+| Playwright UI | 22 | 0 |
 
-The suite covers:
-
-- Account registration and invalid login
-- Event search and details
-- Registration, duplicate prevention, cancellation, and re-registration
-- Capacity validation and concurrent registration limits
-- Organizer event creation
-- Missing, invalid, expired, and revoked authentication tokens
-- Password hashing
-- SQL injection and malformed-input rejection
-- Administrator role changes and non-administrator access denial
-- Database integrity after failed validation and authorization requests
-
-The recorded test run completed successfully. Results apply to the automated cases in this suite and do not establish that every planned test case or non-functional requirement has been verified.
-
----
+Detailed case IDs, browser versions, benchmark values, security findings, and screenshot evidence are in [`02_Test_Planning/Project_Wide_Testing_Audit_Report.md`](02_Test_Planning/Project_Wide_Testing_Audit_Report.md).
 
 ## Continuous Integration
 
@@ -183,6 +171,7 @@ The workflow:
 - Installs backend dependencies using `npm ci`; `better-sqlite3` uses its native Linux binding on the Ubuntu runner.
 - Checks the syntax of tracked JavaScript files.
 - Runs the existing backend test suite with `npm test`.
+- Installs Chromium and Firefox and runs `npm run test:e2e`.
 
 The workflow was merged into `main` through pull request **#57**, and the GitHub Actions check passed.
 
@@ -190,16 +179,12 @@ The workflow was merged into `main` through pull request **#57**, and the GitHub
 
 ## Remaining Verification Activities
 
-The following activities require their own evidence and should not be considered complete solely because the API suite passes:
+The local audit does not establish:
 
-- Cross-browser verification using Chrome, Edge, and Firefox.
-- Desktop and mobile responsive-layout checks.
-- Usability and navigation verification.
-- Measured response times for event listing and registration under the test plan's specified conditions.
-- Completion and traceability of all planned test cases, including cases that require manual execution.
-- Additional security checks specified in the test plan but not covered by the current automated suite.
-
-Record the actual results, environment, and supporting evidence for each activity before marking it complete in the test report.
+- Microsoft Edge compatibility; Edge was not run in this audit.
+- Remote GitHub Actions success after adding the browser job.
+- A full WCAG/axe scan or assistive-technology evaluation.
+- Production network latency, large-scale load, or memory profiling.
 
 ---
 

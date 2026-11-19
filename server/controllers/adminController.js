@@ -1,3 +1,4 @@
+
 const adminService = require('../services/adminService');
 
 function getOverview(req, res) {
@@ -22,10 +23,18 @@ function getUsers(req, res) {
 
 function updateUserRole(req, res) {
   try {
-    const message = adminService.updateUserRole(req.params.id, req.body.role);
+    const message = adminService.updateUserRole(
+      req.params.id,
+      req.body.role,
+      req.user.id
+    );
+
     return res.status(200).json({ message });
   } catch (error) {
-    if (error.status) return res.status(error.status).json({ error: error.message });
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message });
+    }
+
     return res.status(500).json({ error: 'Failed to update user role.' });
   }
 }
@@ -37,9 +46,13 @@ function updateUserStatus(req, res) {
       req.body.status,
       req.user.id
     );
+
     return res.status(200).json({ message });
   } catch (error) {
-    if (error.status) return res.status(error.status).json({ error: error.message });
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message });
+    }
+
     return res.status(500).json({ error: 'Failed to update user status.' });
   }
 }
@@ -57,9 +70,10 @@ function getEvents(req, res) {
 function getReports(req, res) {
   try {
     const report = adminService.getReports();
+
     return res.status(200).json({ report });
   } catch (error) {
-    console.error('Admin reports fetch error:', error);
+    console.error('Admin reports error:', error);
     return res.status(500).json({ error: 'Failed to generate system reports.' });
   }
 }

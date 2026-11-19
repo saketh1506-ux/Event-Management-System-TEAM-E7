@@ -13,4 +13,8 @@ Purpose: Demonstration evidence, updated project overview/setup information, and
 
 - Evidence/checklist of the final repository review.
 
-The project README remains at the repository root.
+## Still to provide
+
+- A continuous demonstration video, if required. Existing screenshots are not a substitute for a video.
+- Completed human sign-off for the remaining items in the final review checklist.
+- The project overview and implementation/run instructions remain in the repository-root [`README.md`](../README.md) and [`IMPLEMENTATION.md`](../IMPLEMENTATION.md).

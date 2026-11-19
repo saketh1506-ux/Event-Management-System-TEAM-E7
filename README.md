@@ -127,7 +127,7 @@ Testing covers:
 - Registration reporting
 - Administrator functions
 
-The automated suite is run from `server/tests/api.test.js`. Passing API tests demonstrate backend coverage only; browser, performance, usability, and remaining planned test cases require separate verification and evidence.
+Run the backend API suite from `server` with `npm test`. Run the Playwright workflows in Chromium and Firefox with `npx playwright install chromium firefox` followed by `npm run test:e2e`. Current scope and results are recorded in [the project-wide testing audit](02_Test_Planning/Project_Wide_Testing_Audit_Report.md); the NFR reports contain measured performance evidence.
 
 The test cases are documented in [docs/12_Test_Cases.docx](docs/12_Test_Cases.docx).
 

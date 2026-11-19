@@ -3,7 +3,9 @@ const db = require('../db');
 function findAll(filters) {
   const { search, category, status, date } = filters;
   let query = `
-    SELECT e.*, u.name as organizer_name, u.email as organizer_email,
+    SELECT e.id, e.title, e.description, e.category, e.location, e.date, e.time,
+      e.capacity, e.organizer_id, e.status, e.created_at,
+      u.name as organizer_name, u.email as organizer_email,
       (SELECT COUNT(*) FROM registrations r WHERE r.event_id = e.id AND r.status = 'confirmed') as registered_count
     FROM events e
     JOIN users u ON e.organizer_id = u.id
@@ -29,8 +31,16 @@ function findAll(filters) {
   }
 
   if (search && search.trim() !== '') {
-    query += ' AND (e.title LIKE ? OR e.description LIKE ? OR e.location LIKE ?)';
-    const term = `%${search.trim()}%`;
+    const searchTerm = search.trim();
+    const term = `%${searchTerm}%`;
+    if (/[^%_]{3}/u.test(searchTerm)) {
+      query += ` AND e.id IN (
+        SELECT rowid FROM events_fts
+        WHERE title LIKE ? OR description LIKE ? OR location LIKE ?
+      )`;
+    } else {
+      query += ' AND (e.title LIKE ? OR e.description LIKE ? OR e.location LIKE ?)';
+    }
     params.push(term, term, term);
   }
 

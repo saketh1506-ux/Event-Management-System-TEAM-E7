@@ -220,6 +220,8 @@ test('FR-02: Event listing preserves search, category, date, status, organizer, 
     const active = listing.body.events.find(event => event.id === activeId);
     assert.strictEqual(active.organizer_name, 'Saketh Narayanam');
     assert.strictEqual(active.organizer_email, 'organizer@ems.com');
+    assert.strictEqual(active.description, 'Layered filter description');
+    assert.ok(active.created_at);
     assert.strictEqual(active.registered_count, 1);
     assert.strictEqual(active.spots_left, 1);
     assert.strictEqual(active.is_full, false);
@@ -231,6 +233,15 @@ test('FR-02: Event listing preserves search, category, date, status, organizer, 
 
     const category = await request('GET', `/api/events?category=Technology&search=${encodeURIComponent(`Layered Search ${suffix}`)}`);
     assert.deepStrictEqual(category.body.events.map(event => event.id), [activeId]);
+
+    const shortSearch = await request('GET', `/api/events?category=Technology&search=${suffix.toString().slice(0, 2)}`);
+    assert.deepStrictEqual(shortSearch.body.events.map(event => event.id), [activeId]);
+
+    const locationSearch = await request('GET', `/api/events?search=${encodeURIComponent(`Layered Hall ${suffix}`)}`);
+    assert.deepStrictEqual(locationSearch.body.events.map(event => event.id), [activeId]);
+
+    const wildcardSearch = await request('GET', `/api/events?search=${encodeURIComponent(`Layered_Hall ${suffix}`)}`);
+    assert.deepStrictEqual(wildcardSearch.body.events.map(event => event.id), [activeId]);
 
     const date = await request('GET', `/api/events?date=2026-12-31&search=${encodeURIComponent(`Layered Search ${suffix}`)}`);
     assert.deepStrictEqual(date.body.events.map(event => event.id), [cancelledId, descriptionId]);
@@ -2313,4 +2324,355 @@ test('SEC-01-02: Identical passwords produce distinct hashes through unique salt
     if (userBId) db.prepare('DELETE FROM users WHERE id = ?').run(userBId);
     db.prepare('DELETE FROM users WHERE email IN (?, ?)').run(userAEmail.toLowerCase(), userBEmail.toLowerCase());
   }
+});
+// SEC-01-03: bcrypt 72-byte password boundary
+test('SEC-01-03: Reject passwords exceeding bcrypt 72-byte limit', async () => {
+  const password = 'A'.repeat(73);
+
+  const res = await request('POST', '/api/auth/register', {
+    name: 'Boundary Test User',
+    email: `boundary73-${Date.now()}@example.com`,
+    password
+  });
+
+  assert.strictEqual(
+    res.status,
+    400,
+    'Passwords exceeding 72 UTF-8 bytes must be rejected'
+  );
+});
+
+// SEC-01-04: Multibyte Unicode password boundary
+test('SEC-01-04: Reject Unicode passwords exceeding 72 bytes', async () => {
+  const password = 'é'.repeat(37);
+
+  assert.strictEqual(Buffer.byteLength(password, 'utf8'), 74);
+
+  const res = await request('POST', '/api/auth/register', {
+    name: 'Unicode Boundary User',
+    email: `unicode74-${Date.now()}@example.com`,
+    password
+  });
+
+  assert.strictEqual(
+    res.status,
+    400,
+    'Unicode passwords exceeding 72 UTF-8 bytes must be rejected'
+  );
+});
+
+// SEC-01-05: Password at exactly 72 bytes
+test('SEC-01-05: Accept password exactly 72 bytes long', async () => {
+  const password = 'A'.repeat(72);
+  const email = `boundary72-${Date.now()}@example.com`;
+
+  const registerRes = await request('POST', '/api/auth/register', {
+    name: 'Exact Boundary User',
+    email,
+    password
+  });
+
+  assert.strictEqual(registerRes.status, 201);
+
+  const loginRes = await request('POST', '/api/auth/login', {
+    email,
+    password
+  });
+
+  assert.strictEqual(loginRes.status, 200);
+});
+
+ // NFR-06-02: Concurrent re-registration after cancellation
+
+test('NFR-06-02: Concurrent re-registration does not create duplicate registrations', async () => {
+  const orgLogin = await request('POST', '/api/auth/login', {
+    email: 'organizer@ems.com',
+    password: 'Org@123'
+  });
+
+  assert.strictEqual(orgLogin.status, 200);
+
+  const createRes = await request('POST', '/api/events', {
+    title: `Concurrent Re-registration ${Date.now()}`,
+    description: 'Testing simultaneous re-registration after cancellation',
+    category: 'Workshop',
+    location: 'Online',
+    date: '2026-12-15',
+    time: '03:00 PM',
+    capacity: 1
+  }, orgLogin.body.token);
+
+  assert.strictEqual(createRes.status, 201);
+
+  const eventId = createRes.body.event.id;
+
+  const userLogin = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+
+  assert.strictEqual(userLogin.status, 200);
+
+  const token = userLogin.body.token;
+  const userId = userLogin.body.user.id;
+
+  // Register for the event
+  const firstRegistration = await request(
+    'POST',
+    `/api/events/${eventId}/register`,
+    {},
+    token
+  );
+
+  assert.strictEqual(firstRegistration.status, 201);
+
+  // Cancel the registration
+  const cancellation = await request(
+    'DELETE',
+    `/api/events/${eventId}/register`,
+    {},
+    token
+  );
+
+  assert.strictEqual(cancellation.status, 200);
+
+  const cancelledRow = db.prepare(`
+    SELECT status
+    FROM registrations
+    WHERE event_id = ? AND user_id = ?
+  `).get(eventId, userId);
+
+  assert.strictEqual(cancelledRow.status, 'cancelled');
+
+  // Attempt two re-registrations simultaneously
+  const responses = await Promise.all([
+    request('POST', `/api/events/${eventId}/register`, {}, token),
+    request('POST', `/api/events/${eventId}/register`, {}, token)
+  ]);
+
+  // Only one request should succeed
+  assert.strictEqual(
+    responses.filter(r => r.status === 201).length,
+    1,
+    'Exactly one re-registration must succeed'
+  );
+
+  // The duplicate request must be rejected
+  assert.strictEqual(
+    responses.filter(r => r.status === 409).length,
+    1,
+    'Duplicate re-registration must be rejected'
+  );
+
+  // Verify only one registration exists
+  const rows = db.prepare(`
+    SELECT status
+    FROM registrations
+    WHERE event_id = ? AND user_id = ?
+  `).all(eventId, userId);
+
+  assert.strictEqual(rows.length, 1);
+  assert.strictEqual(rows[0].status, 'confirmed');
+
+  // Verify event capacity
+  const detailRes = await request(
+    'GET',
+    `/api/events/${eventId}`
+  );
+
+  assert.strictEqual(detailRes.status, 200);
+  assert.strictEqual(detailRes.body.event.registered_count, 1);
+  assert.strictEqual(detailRes.body.event.spots_left, 0);
+});
+
+test('SEC-05-05: Administrator cannot demote their own account', async () => {
+  const adminLogin = await request('POST', '/api/auth/login', {
+    email: 'admin@ems.com',
+    password: 'Admin@123'
+  });
+
+  assert.strictEqual(adminLogin.status, 200);
+
+  const adminId = adminLogin.body.user.id;
+  const adminToken = adminLogin.body.token;
+
+  // Attempt to demote the administrator to a normal user
+  const userDemotion = await request(
+    'PATCH',
+    `/api/admin/users/${adminId}/role`,
+    { role: 'user' },
+    adminToken
+  );
+
+  assert.strictEqual(userDemotion.status, 400);
+  assert.match(userDemotion.body.error, /cannot demote/i);
+
+  // Attempt to demote the administrator to an organizer
+  const organizerDemotion = await request(
+    'PATCH',
+    `/api/admin/users/${adminId}/role`,
+    { role: 'organizer' },
+    adminToken
+  );
+
+  assert.strictEqual(organizerDemotion.status, 400);
+  assert.match(organizerDemotion.body.error, /cannot demote/i);
+
+  // Verify the administrator's role remains unchanged
+  const admin = db.prepare(
+    'SELECT role FROM users WHERE id = ?'
+  ).get(adminId);
+
+  assert.strictEqual(admin.role, 'admin');
+
+  // Verify the administrator still has access
+  const overview = await request(
+    'GET',
+    '/api/admin/overview',
+    null,
+    adminToken
+  );
+
+  assert.strictEqual(overview.status, 200);
+});
+
+test('SEC-04-07: Existing sessions reflect current account role and suspension status', async () => {
+  const suffix = Date.now();
+  const registration = await request('POST', '/api/auth/register', {
+    name: 'Session Role Test',
+    email: `session-role-${suffix}@example.com`,
+    password: 'Password123'
+  });
+  assert.strictEqual(registration.status, 201);
+
+  const adminLogin = await request('POST', '/api/auth/login', {
+    email: 'admin@ems.com',
+    password: 'Admin@123'
+  });
+  assert.strictEqual(adminLogin.status, 200);
+
+  const userId = registration.body.user.id;
+  const adminToken = adminLogin.body.token;
+  const eventData = {
+    title: `Session Role Event ${suffix}`,
+    description: 'Verifies account role changes apply to existing sessions.',
+    category: 'Workshop',
+    location: 'Online',
+    date: '2027-01-15',
+    time: '10:00 AM',
+    capacity: 5
+  };
+
+  try {
+    const promote = await request('PATCH', `/api/admin/users/${userId}/role`, {
+      role: 'organizer'
+    }, adminToken);
+    assert.strictEqual(promote.status, 200);
+
+    const createdEvent = await request('POST', '/api/events', eventData, registration.body.token);
+    assert.strictEqual(createdEvent.status, 201);
+    const eventId = createdEvent.body.event.id;
+
+    const demote = await request('PATCH', `/api/admin/users/${userId}/role`, {
+      role: 'user'
+    }, adminToken);
+    assert.strictEqual(demote.status, 200);
+
+    const unauthorizedCreate = await request('POST', '/api/events', {
+      ...eventData,
+      title: `Demoted Session Event ${suffix}`
+    }, registration.body.token);
+    assert.strictEqual(unauthorizedCreate.status, 403);
+
+    const suspend = await request('PATCH', `/api/admin/users/${userId}/status`, {
+      status: 'suspended'
+    }, adminToken);
+    assert.strictEqual(suspend.status, 200);
+
+    const suspendedSession = await request(
+      'GET',
+      '/api/users/me/events',
+      null,
+      registration.body.token
+    );
+    assert.strictEqual(suspendedSession.status, 401);
+    assert.match(suspendedSession.body.error, /no longer active/i);
+
+    db.prepare('DELETE FROM events WHERE id = ?').run(eventId);
+  } finally {
+    db.prepare('DELETE FROM events WHERE organizer_id = ?').run(userId);
+    db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+  }
+});
+
+test('SEC-04-08: Revocation database errors fail closed', async () => {
+  const userLogin = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'User@123'
+  });
+  assert.strictEqual(userLogin.status, 200);
+
+  db.exec('DROP TABLE revoked_tokens');
+  try {
+    const response = await request(
+      'GET',
+      '/api/users/me/events',
+      null,
+      userLogin.body.token
+    );
+    assert.strictEqual(response.status, 500);
+    assert.match(response.body.error, /unexpected internal server error/i);
+  } finally {
+    db.exec(`
+      CREATE TABLE revoked_tokens (
+        token_hash TEXT PRIMARY KEY,
+        user_id INTEGER,
+        expires_at DATETIME,
+        revoked_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  }
+});
+
+test('SEC-01-06: Missing credentials and passwords over 72 UTF-8 bytes are rejected', async () => {
+  const missingEmail = await request('POST', '/api/auth/login', {
+    password: 'Password123'
+  });
+  assert.strictEqual(missingEmail.status, 400);
+  assert.ok(missingEmail.body.error);
+
+  const missingPassword = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com'
+  });
+  assert.strictEqual(missingPassword.status, 400);
+  assert.ok(missingPassword.body.error);
+
+  const veryLongPassword = await request('POST', '/api/auth/login', {
+    email: 'likhith@ems.com',
+    password: 'a'.repeat(10000)
+  });
+  assert.strictEqual(veryLongPassword.status, 400);
+  assert.ok(veryLongPassword.body.error);
+
+  const multibytePassword = 'é'.repeat(37);
+  assert.strictEqual(Buffer.byteLength(multibytePassword, 'utf8'), 74);
+  const overlongRegistration = await request('POST', '/api/auth/register', {
+    name: 'Overlong Password',
+    email: `overlong-${Date.now()}@example.com`,
+    password: multibytePassword
+  });
+  assert.strictEqual(overlongRegistration.status, 400);
+  assert.match(overlongRegistration.body.error, /72 UTF-8 bytes/i);
+});
+
+test('SEC-03-11: Oversized JSON request bodies return HTTP 413', async () => {
+  const response = await request('POST', '/api/auth/register', {
+    name: 'Oversized Payload',
+    email: `oversized-${Date.now()}@example.com`,
+    password: 'Password123',
+    extra: 'x'.repeat(110 * 1024)
+  });
+
+  assert.strictEqual(response.status, 413);
+  assert.deepStrictEqual(response.body, { error: 'Request body too large.' });
 });

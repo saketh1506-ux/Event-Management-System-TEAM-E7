@@ -116,8 +116,8 @@ const authSchemas = {
     if (password.length < 6) {
       return { error: 'Password must be at least 6 characters long.' };
     }
-    if (password.length > 128) {
-      return { error: 'Password cannot exceed 128 characters.' };
+    if (Buffer.byteLength(password, 'utf8') > 72) {
+      return { error: 'Password cannot exceed 72 UTF-8 bytes.' };
     }
 
     // Role escalation guard: reject public registration attempts to claim admin role
@@ -162,7 +162,7 @@ const authSchemas = {
     if (trimmedEmail.length > 254) {
       return { error: 'Invalid email or password.' };
     }
-    if (password.length > 128) {
+    if (Buffer.byteLength(password, 'utf8') > 72) {
       return { error: 'Invalid email or password.' };
     }
 

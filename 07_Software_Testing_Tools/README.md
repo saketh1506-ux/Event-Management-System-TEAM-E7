@@ -2,10 +2,12 @@
 
 Purpose: Evidence of a real defect found and fixed with AI-assisted investigation.
 
-## Missing deliverables
+## Available evidence
 
-- A recorded real defect.
-- Evidence reproducing the defect and its failing behavior.
-- Evidence of Copilot or another allowed AI tool investigating/suggesting a fix.
-- The reviewed patch associated with that defect.
-- Retest evidence for the same failing case after the patch.
+- [`Invalid_Event_Date_Bug_Report.md`](Invalid_Event_Date_Bug_Report.md) records the defect, reproduction steps, expected/actual behavior, root cause, fix, regression coverage, and retest outcome.
+- The underlying fix and API regression test are in `server/middleware/validate.js` and `server/tests/api.test.js`.
+- The AI-assisted investigation summary is also documented in [`AI_Bug_Fix_Evidence.md`](../06_GitHub_Copilot/AI_Bug_Fix_Evidence.md).
+
+## Evidence limitation
+
+- No screenshot or exported AI conversation was captured. The investigation and test evidence are documented in text.
