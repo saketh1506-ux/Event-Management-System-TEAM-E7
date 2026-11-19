@@ -2,9 +2,15 @@
 
 Purpose: Demonstration evidence, updated project overview/setup information, and final repository review.
 
-## Missing deliverables
+## Demonstration
 
-- A demonstration video or application-output screenshots.
+- [EventHub_Feature_Demo.mp4](./EventHub_Feature_Demo.mp4) is a two-minute walkthrough of event discovery and filtering, attendee sign-up and registration, organizer event management and reports, announcements, and admin controls.
+- [EventHub_Feature_Demo.srt](./EventHub_Feature_Demo.srt) provides selectable subtitles. The captions are also shown in a separate strip below the app footage.
+- [EventHub_Sprint_1_Feature_Demo.mp4](./EventHub_Sprint_1_Feature_Demo.mp4) is a two-minute walkthrough limited to Sprint 1 features, including authentication, event discovery, registration and capacity rules, organizer management, and responsive layout.
+- [EventHub_Sprint_1_Feature_Demo.srt](./EventHub_Sprint_1_Feature_Demo.srt) provides selectable subtitles for the Sprint 1 video.
+
+## Remaining deliverable
+
 - Evidence/checklist of the final repository review.
 
 The project README remains at the repository root.

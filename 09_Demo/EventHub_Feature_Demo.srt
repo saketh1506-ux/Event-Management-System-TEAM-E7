@@ -1,0 +1,60 @@
+1
+00:00:00,000 --> 00:00:08,000
+Welcome to EventHub, a role-based event management system from Team E7.
+
+2
+00:00:08,000 --> 00:00:16,000
+Search by keyword, then narrow the results with category and date filters.
+
+3
+00:00:16,000 --> 00:00:24,000
+Open event details to check the description, schedule, venue, organizer, and spots left.
+
+4
+00:00:24,000 --> 00:00:32,000
+Sign up as an attendee or organizer; account registration and login are built in.
+
+5
+00:00:32,000 --> 00:00:40,000
+My Registrations shows confirmed events and offers cancellation to release your place.
+
+6
+00:00:40,000 --> 00:00:48,000
+The Organizer Studio brings created events, live capacity, and management actions together.
+
+7
+00:00:48,000 --> 00:00:56,000
+Create an event with category, description, venue, date, time, and participant capacity.
+
+8
+00:00:56,000 --> 00:01:04,000
+Edit event details and capacity in place, then save the updated listing.
+
+9
+00:01:04,000 --> 00:01:12,000
+Review participant names and statuses with confirmed, cancelled, and available totals.
+
+10
+00:01:12,000 --> 00:01:20,000
+View occupancy and registration summaries; export the attendee report as CSV.
+
+11
+00:01:20,000 --> 00:01:28,000
+Send event announcements directly to registered participants.
+
+12
+00:01:28,000 --> 00:01:36,000
+Attendees see organizer updates beside their registered events.
+
+13
+00:01:36,000 --> 00:01:44,000
+Admins monitor platform totals and review roles, account status, and event activity.
+
+14
+00:01:44,000 --> 00:01:52,000
+Update account roles or suspend and reactivate users from the admin table.
+
+15
+00:01:52,000 --> 00:02:00,000
+Compare event capacity and utilization, and remove inappropriate events.
+
