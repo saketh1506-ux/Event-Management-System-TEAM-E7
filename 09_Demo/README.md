@@ -2,11 +2,16 @@
 
 Purpose: Demonstration evidence, updated project overview/setup information, and final repository review.
 
-## Available materials
+## Demonstration
 
-- [`Demo_Run_Script.md`](Demo_Run_Script.md) provides a presenter walkthrough and links to the existing automated browser screenshots.
-- [`Final_Repository_Review_Checklist.md`](Final_Repository_Review_Checklist.md) records verified evidence and the remaining human/external checks.
-- Application screenshots are stored in [`02_Test_Planning/evidence/`](../02_Test_Planning/evidence/).
+- [EventHub_Feature_Demo.mp4](./EventHub_Feature_Demo.mp4) is a two-minute walkthrough of event discovery and filtering, attendee sign-up and registration, organizer event management and reports, announcements, and admin controls.
+- [EventHub_Feature_Demo.srt](./EventHub_Feature_Demo.srt) provides selectable subtitles. The captions are also shown in a separate strip below the app footage.
+- [EventHub_Sprint_1_Feature_Demo.mp4](./EventHub_Sprint_1_Feature_Demo.mp4) is a two-minute walkthrough limited to Sprint 1 features, including authentication, event discovery, registration and capacity rules, organizer management, and responsive layout.
+- [EventHub_Sprint_1_Feature_Demo.srt](./EventHub_Sprint_1_Feature_Demo.srt) provides selectable subtitles for the Sprint 1 video.
+
+## Remaining deliverable
+
+- Evidence/checklist of the final repository review.
 
 ## Still to provide
 
